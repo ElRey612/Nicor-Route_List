@@ -1,0 +1,2783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nicor Route Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --border: #252830;
+    --accent-asphalt: #f5a623;
+    --accent-concrete: #6eb5ff;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --info: #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+  /* Header */
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 15px 32px; display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .logo { width: 34px; height: 34px; background: var(--accent-asphalt); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  header h1 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -0.4px; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .origin-badge { display: flex; align-items: center; gap: 6px; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); border-radius: 20px; padding: 4px 11px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--success); }
+  .flag-counter { display: none; align-items: center; gap: 6px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 20px; padding: 4px 11px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--danger); cursor: pointer; transition: background 0.15s; }
+  .flag-counter:hover { background: rgba(248,113,113,0.18); }
+  .flag-counter.show { display: flex; }
+
+  .container { padding: 22px 32px; max-width: 1440px; margin: 0 auto; }
+
+  /* Upload */
+  #drop-zone { border: 2px dashed var(--border); border-radius: 16px; padding: 56px 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface); position: relative; }
+  #drop-zone:hover, #drop-zone.drag-over { border-color: var(--accent-asphalt); background: #1a1c22; }
+  #drop-zone h2 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  #drop-zone p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .btn-upload { display: inline-flex; align-items: center; gap: 7px; background: var(--accent-asphalt); color: #000; font-weight: 600; padding: 11px 22px; border-radius: 8px; font-size: 13px; pointer-events: none; }
+
+  /* Banners */
+  .banner { border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; line-height: 1.5; display: none; }
+  .banner.show { display: block; }
+  .banner.warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--warning); }
+  .banner.info    { background: rgba(110,181,255,0.07); border: 1px solid rgba(110,181,255,0.2);  color: var(--accent-concrete); }
+  .banner.success { background: rgba(52,211,153,0.08);  border: 1px solid rgba(52,211,153,0.25);  color: var(--success); }
+
+  /* Stats */
+  .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 11px; margin: 16px 0; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; }
+  .stat-card .label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 4px; }
+  .stat-card .value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
+  .stat-card.total    .value { color: var(--success); }
+  .stat-card.asphalt  .value { color: var(--accent-asphalt); }
+  .stat-card.concrete .value { color: var(--accent-concrete); }
+  .stat-card.dual     .value { color: var(--warning); }
+  .stat-card.flagged  .value { color: var(--danger); }
+
+  /* ── ADDRESS REVIEW PANEL ── */
+  #review-section { margin-bottom: 22px; }
+  .review-panel { background: var(--surface); border: 1px solid rgba(248,113,113,0.35); border-top: 3px solid var(--danger); border-radius: 14px; overflow: hidden; }
+  .review-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .review-header h2 { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 800; color: var(--danger); flex: 1; }
+  .review-desc { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 12px 20px; border-bottom: 1px solid var(--border); background: rgba(248,113,113,0.04); }
+  .review-desc strong { color: var(--text); }
+
+  .fix-cards { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  .fix-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .fix-card.resolved { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.03); }
+  .fix-card.resolved .flag-icon { color: var(--success); }
+
+  .fix-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+  .flag-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .fix-ticket-info .ticket-id { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .fix-ticket-info .original-addr { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .fix-ticket-info .flag-reason { font-size: 11px; color: var(--danger); margin-bottom: 2px; }
+  .fix-ticket-info .fix-suggestion { font-size: 11px; color: var(--info); }
+  .fix-card.resolved .flag-reason { display: none; }
+  .fix-card.resolved .fix-suggestion { color: var(--success); }
+
+  .fix-inputs { display: grid; grid-template-columns: 2fr 1fr 80px; gap: 8px; align-items: end; }
+  .fix-inputs label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+  .fix-input {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 11px; border-radius: 7px; font-size: 13px; width: 100%;
+    font-family: 'Inter', sans-serif; transition: border-color 0.15s; outline: none;
+  }
+  .fix-input:focus { border-color: var(--accent-asphalt); }
+  .fix-input.input-error { border-color: rgba(248,113,113,0.6); background: rgba(248,113,113,0.05); }
+  .fix-input.input-ok    { border-color: rgba(52,211,153,0.4);  background: rgba(52,211,153,0.04); }
+
+  .btn-verify {
+    padding: 8px 14px; background: var(--info); color: white;
+    border: none; border-radius: 7px; font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+    display: flex; align-items: center; gap: 5px; justify-content: center;
+  }
+  .btn-verify:hover { opacity: 0.85; }
+  .btn-verify.verifying { opacity: 0.6; pointer-events: none; }
+
+  .verify-result { margin-top: 8px; font-size: 11px; font-family: 'DM Mono', monospace; padding: 7px 10px; border-radius: 6px; display: none; }
+  .verify-result.show { display: block; }
+  .verify-result.ok  { background: rgba(52,211,153,0.08); color: var(--success); border: 1px solid rgba(52,211,153,0.2); }
+  .verify-result.err { background: rgba(248,113,113,0.08); color: var(--danger);  border: 1px solid rgba(248,113,113,0.2); }
+  .verify-result.warn { background: rgba(251,191,36,0.08); color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
+
+  .apply-all-row { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .apply-all-row p { font-size: 12px; color: var(--muted); flex: 1; }
+
+  /* Routes */
+  .top-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .top-bar h3 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; flex: 1; }
+
+  .routes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .route-panel { background: var(--surface); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; }
+  .panel-asphalt  { border-top: 3px solid var(--accent-asphalt); }
+  .panel-concrete { border-top: 3px solid var(--accent-concrete); }
+
+  .panel-header { padding: 14px 18px 11px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-header h2 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .panel-asphalt  .panel-header h2 { color: var(--accent-asphalt); }
+  .panel-concrete .panel-header h2 { color: var(--accent-concrete); }
+  .panel-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-align: right; line-height: 1.6; }
+
+  .segment-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px 5px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .segment-header .seg-line { flex: 1; height: 1px; background: var(--border); }
+  .miles-tag { background: rgba(52,211,153,0.08); color: var(--success); border: 1px solid rgba(52,211,153,0.2); border-radius: 4px; padding: 1px 6px; font-size: 9px; }
+
+  .tickets-list { padding: 8px; flex: 1; overflow-y: auto; max-height: 62vh; display: flex; flex-direction: column; gap: 5px; }
+
+  .ticket-row { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; display: grid; grid-template-columns: 36px 32px 1fr auto; gap: 8px; align-items: start; transition: border-color 0.15s; }
+  .ticket-row:hover { border-color: #353840; }
+  .ticket-row.dual-tag    { border-left: 3px solid var(--warning); }
+  .ticket-row.origin-tag  { border-left: 3px solid var(--success); background: rgba(52,211,153,0.04); }
+  .ticket-row.flagged-row { border-left: 3px solid var(--danger); background: rgba(248,113,113,0.03); }
+  .ticket-row.fixed-row   { border-left: 3px solid var(--success); }
+
+  .stop-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; flex-shrink: 0; margin-top: 1px; }
+  .stop-num.asphalt  { background: rgba(245,166,35,0.15);  color: var(--accent-asphalt); }
+  .stop-num.concrete { background: rgba(110,181,255,0.12); color: var(--accent-concrete); }
+  .stop-num.origin   { background: rgba(52,211,153,0.15);  color: var(--success); font-size: 12px; }
+
+  .ticket-info .address { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  .ticket-info .csi-ref { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); margin-bottom: 3px; }
+  .ticket-info .csi-ref strong { color: var(--accent-asphalt); letter-spacing: 0.3px; }
+  .ticket-info .meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1px; }
+  .ticket-info .work { font-size: 10px; color: #9ca3af; line-height: 1.4; margin-top: 2px; }
+  .ticket-info .order-ref { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .ticket-info .flag-note  { font-size: 10px; color: var(--danger);  margin-top: 3px; }
+  .ticket-info .fixed-note { font-size: 10px; color: var(--success); margin-top: 3px; }
+
+  .dist-tag { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; padding-top: 3px; text-align: right; }
+  .dist-tag .mi { font-size: 11px; color: var(--success); font-weight: 500; display: block; }
+
+  .dual-pill { display: inline-block; background: rgba(251,191,36,0.12); color: var(--warning); border: 1px solid rgba(251,191,36,0.25); border-radius: 4px; font-size: 9px; font-family: 'DM Mono', monospace; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+  .flag-pill { display: inline-block; background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); border-radius: 4px; font-size: 9px; font-family: 'DM Mono', monospace; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+  .fixed-pill { display: inline-block; background: rgba(52,211,153,0.12); color: var(--success); border: 1px solid rgba(52,211,153,0.3); border-radius: 4px; font-size: 9px; font-family: 'DM Mono', monospace; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+
+  .action-row { padding: 11px 13px; border-top: 1px solid var(--border); display: flex; gap: 7px; flex-wrap: wrap; }
+
+  .btn { display: inline-flex; align-items: center; gap: 5px; padding: 8px 13px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.15s, transform 0.1s; text-decoration: none; }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+  .btn-maps   { background: #4285f4; color: white; }
+  .btn-export { background: var(--success); color: #000; }
+  .btn-reset  { background: var(--border); color: var(--muted); }
+  .btn-apply  { background: var(--success); color: #000; }
+  .btn-sm     { padding: 6px 11px; font-size: 11px; }
+  .btn-skip   { background: rgba(248,113,113,0.15); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-skip:hover { background: rgba(248,113,113,0.28); }
+  .btn-unskip { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid var(--border); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-unskip:hover { background: rgba(107,114,128,0.28); }
+  .btn-start   { background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.35); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-start:hover { background: rgba(96,165,250,0.28); }
+  .btn-complete { background: rgba(52,211,153,0.15); color: var(--success); border: 1px solid rgba(52,211,153,0.3); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-complete:hover { background: rgba(52,211,153,0.28); }
+  .btn-uncomplete { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid var(--border); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: 'Inter', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-uncomplete:hover { background: rgba(107,114,128,0.22); }
+  .btn-end-day { background: var(--warning); color: #000; font-weight: 700; }
+
+  /* Active stop (started, not yet done) */
+  .ticket-row.active-stop { border-left: 3px solid #60a5fa !important; background: rgba(96,165,250,0.04) !important; }
+  .active-status { font-size: 10px; color: #60a5fa; font-family: 'DM Mono', monospace; margin-top: 4px; font-weight: 500; }
+
+  /* Completed ticket visual state */
+  .ticket-row.completed-ticket { opacity: 0.55; border-left: 3px solid var(--success) !important; background: rgba(52,211,153,0.03) !important; }
+  .ticket-row.completed-ticket .address { color: var(--muted); }
+  .ticket-row.completed-ticket .stop-num { background: rgba(52,211,153,0.15) !important; color: var(--success) !important; }
+  .complete-status { font-size: 10px; color: var(--success); font-family: 'DM Mono', monospace; margin-top: 4px; font-weight: 500; }
+  .timing-badge { font-size: 10px; color: var(--success); font-family: 'DM Mono', monospace; }
+
+  /* Rate input bar */
+  .rate-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rate-bar label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .rate-input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 13px; font-family: 'DM Mono', monospace; width: 90px; outline: none; }
+  .rate-input:focus { border-color: var(--warning); }
+  .rate-bar .rate-note { font-size: 11px; color: var(--muted); flex: 1; }
+
+  /* Progress bar */
+  .progress-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: none; }
+  .progress-bar-wrap.show { display: block; }
+  .progress-bar-label { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .progress-bar-label .prog-done { color: var(--success); font-weight: 600; }
+  .progress-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; background: linear-gradient(90deg, var(--success), #6ee7b7); }
+
+  /* Printable EOD report */
+  @media print {
+    body { background: white !important; color: #111 !important; }
+    header, #drop-zone, #results, .modal-bg { display: none !important; }
+    #eod-print-view { display: block !important; }
+  }
+  #eod-print-view { display: none; position: fixed; inset: 0; background: #fff; color: #111; z-index: 200; overflow-y: auto; padding: 32px; font-family: 'Inter', sans-serif; }
+  #eod-print-view.show { display: block; }
+  .eod-print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #111; padding-bottom: 16px; }
+  .eod-print-header h1 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; margin: 0; }
+  .eod-print-header .eod-date { font-family: 'DM Mono', monospace; font-size: 12px; color: #666; margin-top: 4px; }
+  .eod-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .eod-kpi { border: 1px solid #ddd; border-radius: 8px; padding: 14px; text-align: center; }
+  .eod-kpi .kv { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; }
+  .eod-kpi .kl { font-size: 11px; color: #666; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.8px; }
+  .eod-kpi.kpi-green .kv { color: #059669; }
+  .eod-kpi.kpi-amber .kv { color: #d97706; }
+  .eod-kpi.kpi-red   .kv { color: #dc2626; }
+  .eod-kpi.kpi-blue  .kv { color: #2563eb; }
+  .eod-section-title { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #888; margin: 20px 0 8px; border-top: 1px solid #eee; padding-top: 12px; }
+  .eod-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+  .eod-type-card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+  .eod-type-card .tc-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .eod-type-card .tc-time { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #111; }
+  .eod-type-card .tc-sub { font-size: 11px; color: #666; margin-top: 2px; }
+  .eod-ticket-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  .eod-ticket-table th { text-align: left; font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; border-bottom: 1px solid #ddd; padding: 6px 8px; }
+  .eod-ticket-table td { padding: 7px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .eod-ticket-table tr.skipped-row td { color: #dc2626; }
+  .eod-ticket-table tr.notreached-row td { color: #9ca3af; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-green { background: #059669; }
+  .dot-red   { background: #dc2626; }
+  .dot-gray  { background: #9ca3af; }
+  .eod-print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #eee; font-size: 11px; color: #aaa; display: flex; justify-content: space-between; }
+  .btn-close-print { position: fixed; top: 20px; right: 20px; background: #111; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; z-index: 201; }
+  @media (max-width: 600px) {
+    .eod-kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .eod-type-grid { grid-template-columns: repeat(2, 1fr); }
+    #eod-print-view { padding: 20px; }
+    .eod-print-header h1 { font-size: 18px; }
+  }
+
+  /* Progress bar */
+  .progress-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: none; }
+  .progress-bar-wrap.show { display: block; }
+  .progress-bar-label { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .progress-bar-label .prog-done { color: var(--success); font-weight: 600; }
+  .progress-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; background: linear-gradient(90deg, var(--success), #6ee7b7); }
+
+  /* End of Day / Carryover modal */
+  .eod-modal { max-width: 580px; }
+  .eod-modal h3 { color: var(--warning); }
+  .eod-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .eod-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .eod-stat .es-val { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
+  .eod-stat .es-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+  .eod-stat.es-done  .es-val { color: var(--success); }
+  .eod-stat.es-left  .es-val { color: var(--warning); }
+  .eod-stat.es-skip  .es-val { color: var(--danger); }
+
+  .eod-section-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 8px; margin-top: 4px; }
+  .last-stop-box { background: var(--bg); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+  .last-stop-box .ls-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--warning); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .last-stop-box .ls-addr  { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+  .last-stop-box .ls-meta  { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  .routing-choice { margin-bottom: 16px; }
+  .routing-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .routing-opt { background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.15s; }
+  .routing-opt:hover { border-color: var(--warning); }
+  .routing-opt.selected { border-color: var(--warning); background: rgba(251,191,36,0.06); }
+  .routing-opt .ro-icon { font-size: 20px; margin-bottom: 5px; }
+  .routing-opt .ro-title { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
+  .routing-opt .ro-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .eod-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .btn-carryover { background: var(--warning); color: #000; font-weight: 700; }
+
+  /* Skipped ticket visual state */
+  .ticket-row.skipped-ticket { opacity: 0.5; border-left: 3px solid var(--danger) !important; background: rgba(248,113,113,0.04) !important; }
+  .ticket-row.skipped-ticket .address { text-decoration: line-through; color: var(--muted); }
+  .ticket-row.skipped-ticket .stop-num { opacity: 0.4; }
+  .skip-status { font-size: 10px; color: var(--danger); font-family: 'DM Mono', monospace; margin-top: 4px; font-weight: 500; }
+
+  /* Skip counter in header */
+  .skip-counter { display: none; align-items: center; gap: 6px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 20px; padding: 4px 11px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--danger); cursor: pointer; transition: background 0.15s; }
+  .skip-counter:hover { background: rgba(248,113,113,0.2); }
+  .skip-counter.show { display: flex; }
+
+  /* Skipped summary panel */
+  .skipped-summary { background: var(--surface); border: 1px solid rgba(248,113,113,0.3); border-top: 3px solid var(--danger); border-radius: 14px; margin-top: 22px; overflow: hidden; display: none; }
+  .skipped-summary.show { display: block; }
+  .skipped-summary-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .skipped-summary-header h2 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; color: var(--danger); flex: 1; }
+  .skipped-summary-desc { padding: 10px 20px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); background: rgba(248,113,113,0.03); line-height: 1.5; }
+  .skipped-rows { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .skipped-summary-row { background: var(--bg); border: 1px solid rgba(248,113,113,0.2); border-radius: 8px; padding: 11px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .skipped-summary-row .sk-address { font-weight: 600; font-size: 13px; margin-bottom: 2px; text-decoration: line-through; color: var(--muted); }
+  .skipped-summary-row .sk-csi { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); margin-bottom: 2px; }
+  .skipped-summary-row .sk-csi strong { color: var(--accent-asphalt); }
+  .skipped-summary-row .sk-meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .skipped-summary-row .sk-reason { font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 4px; }
+  .skipped-summary-row .sk-note { font-size: 10px; color: #9ca3af; margin-top: 2px; font-style: italic; }
+  .skipped-summary-actions { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+  .skipped-summary-actions p { font-size: 12px; color: var(--muted); flex: 1; }
+
+  /* Skip reason modal */
+  .skip-modal { max-width: 480px; }
+  .skip-modal h3 { color: var(--danger); }
+  .skip-reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .reason-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); text-align: left; transition: all 0.15s; font-family: 'Inter', sans-serif; }
+  .reason-btn:hover { border-color: var(--danger); background: rgba(248,113,113,0.06); color: var(--danger); }
+  .reason-btn.selected { border-color: var(--danger); background: rgba(248,113,113,0.1); color: var(--danger); }
+  .reason-btn .reason-icon { font-size: 16px; display: block; margin-bottom: 4px; }
+  .skip-note-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+  .skip-note-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 9px 11px; border-radius: 7px; font-size: 13px; font-family: 'Inter', sans-serif; resize: vertical; min-height: 60px; outline: none; margin-bottom: 14px; }
+  .skip-note-input:focus { border-color: var(--danger); }
+  .skip-modal-actions { display: flex; gap: 8px; }
+  .btn-confirm-skip { background: var(--danger); color: white; }
+
+  /* Modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; max-width: 560px; width: 92%; }
+  .modal h3 { font-family: 'Syne', sans-serif; font-size: 16px; margin-bottom: 8px; }
+  .modal p { color: var(--muted); font-size: 13px; margin-bottom: 13px; line-height: 1.6; }
+  .url-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px; font-family: 'DM Mono', monospace; font-size: 10px; color: #9ca3af; word-break: break-all; max-height: 75px; overflow-y: auto; margin-bottom: 13px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  #results { display: none; }
+  #results.show { display: block; }
+  .empty { text-align: center; padding: 36px; color: var(--muted); font-size: 13px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Manual reorder ── */
+  .btn-move { background: rgba(107,114,128,0.12); border: 1px solid var(--border); color: var(--muted);
+    width: 24px; height: 24px; border-radius: 5px; cursor: pointer; font-size: 12px; line-height:1;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding:0; font-family:'Inter',sans-serif; }
+  .btn-move:hover:not(:disabled) { background: rgba(251,191,36,0.15); color: var(--warning); border-color: rgba(251,191,36,0.4); }
+  .btn-move:disabled { opacity: 0.18; cursor: default; }
+  .drag-handle { cursor: grab; color: var(--muted); font-size: 13px; padding: 2px 4px; user-select: none; line-height:1; }
+  .drag-handle:active { cursor: grabbing; }
+  .ticket-row.dragging { opacity: 0.35; border: 2px dashed var(--warning) !important; }
+  .ticket-row.drag-over-top    { border-top: 2px solid var(--warning) !important; }
+  .ticket-row.drag-over-bottom { border-bottom: 2px solid var(--warning) !important; }
+  .reorder-col { display: flex; flex-direction: column; align-items: center; gap: 3px; padding-right: 4px; min-width: 28px; }
+
+  /* ── Concrete Order stops ── */
+  .ticket-row.mat-drop { border-left: 3px solid #a78bfa !important; background: rgba(167,139,250,0.05) !important; }
+  .mat-drop-badge { display:inline-block; background:rgba(167,139,250,0.18); color:#a78bfa; border:1px solid rgba(167,139,250,0.4); border-radius:4px; font-size:10px; font-weight:700; padding:1px 6px; margin-left:6px; letter-spacing:0.5px; }
+  .mat-drop-detail { font-family:'DM Mono',monospace; font-size:11px; color:#a78bfa; margin-top:4px; }
+  .btn-add-drop { background:rgba(167,139,250,0.15); color:#a78bfa; border:1px solid rgba(167,139,250,0.35); font-size:12px; padding:7px 14px; border-radius:7px; cursor:pointer; font-weight:600; font-family:'Inter',sans-serif; transition:background 0.15s; }
+  .btn-add-drop:hover { background:rgba(167,139,250,0.28); }
+  .btn-remove-drop { background:rgba(248,113,113,0.12); color:var(--danger); border:1px solid rgba(248,113,113,0.25); font-size:10px; padding:4px 8px; border-radius:5px; cursor:pointer; font-weight:600; font-family:'Inter',sans-serif; }
+  .btn-remove-drop:hover { background:rgba(248,113,113,0.25); }
+  /* Concrete order modal inputs */
+  .drop-input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px 11px; border-radius:7px; font-size:13px; font-family:'Inter',sans-serif; outline:none; margin-bottom:12px; }
+  .drop-input:focus { border-color:#a78bfa; }
+  .drop-label { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; display:block; }
+
+  /* ── Ticket card right column — dist + action buttons ── */
+  .card-right-col { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 80px; }
+  .card-action-btns { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; }
+  .card-action-btns button { width: 100%; text-align: center; justify-content: center; }
+
+  /* ── Ticket search ── */
+  .search-wrap { position: relative; display: none; align-items: center; }
+  .search-wrap.show { display: flex; }
+  .search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 32px 6px 12px; border-radius: 20px; font-size: 12px; font-family: 'DM Mono', monospace;
+    outline: none; width: 160px; transition: border-color 0.15s, width 0.2s; }
+  .search-input:focus { border-color: var(--warning); width: 200px; }
+  .search-input::placeholder { color: var(--muted); }
+  .search-clear { position: absolute; right: 10px; background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 13px; padding: 0; line-height: 1; display: none; }
+  .search-clear.show { display: block; }
+  .ticket-row.search-highlight { border-color: var(--warning) !important; box-shadow: 0 0 0 2px rgba(251,191,36,0.25); }
+  .ticket-row.search-dim { opacity: 0.25; }
+  .search-no-result { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--danger);
+    padding: 4px 10px; white-space: nowrap; }
+
+  /* ── Jump-to-position input on stop number badge ── */
+  .stop-num-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; width: 32px; }
+  .pos-input { width: 32px; background: var(--bg); border: 1px solid var(--warning);
+    color: var(--warning); border-radius: 5px; font-family: 'DM Mono', monospace;
+    font-size: 10px; text-align: center; padding: 2px 0; outline: none;
+    -moz-appearance: textfield; display: none; }
+  .pos-input::-webkit-outer-spin-button,
+  .pos-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .pos-input.show { display: block; }
+  .stop-num.clickable { cursor: pointer; transition: box-shadow 0.15s; }
+  .stop-num.clickable:hover { box-shadow: 0 0 0 2px rgba(251,191,36,0.5); }
+
+  @keyframes stale-pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+  .route-stale { animation: stale-pulse 1.2s ease-in-out 3; border-color: var(--warning) !important; color: var(--warning) !important; }
+
+  /* ── View mode toggle ── */
+  .view-toggle-wrap { display:flex; align-items:center; gap:6px; }
+  .view-toggle-btn { font-family:'DM Mono',monospace; font-size:11px; font-weight:600; padding:5px 12px;
+    border-radius:20px; cursor:pointer; border:1px solid var(--border); background:var(--surface);
+    color:var(--muted); transition:all 0.15s; white-space:nowrap; }
+  .view-toggle-btn.active-dispatcher { background:rgba(251,191,36,0.15); border-color:var(--warning); color:var(--warning); }
+  .view-toggle-btn.active-crew       { background:rgba(52,211,153,0.15); border-color:var(--success); color:var(--success); }
+
+  /* ── Route filter tabs ── */
+  .route-filter-wrap { display:none; gap:5px; align-items:center; margin-left:auto; }
+  .route-filter-wrap.show { display:flex; }
+  .rfbtn { font-family:'DM Mono',monospace; font-size:10px; font-weight:600; padding:4px 11px;
+    border-radius:16px; cursor:pointer; border:1px solid var(--border); background:var(--surface);
+    color:var(--muted); transition:all 0.15s; }
+  .rfbtn:hover { border-color:var(--accent-concrete); color:var(--text); }
+  .rfbtn.rf-active { background:rgba(110,181,255,0.15); border-color:var(--accent-concrete); color:var(--accent-concrete); }
+  .rfbtn.rf-asphalt.rf-active { background:rgba(245,166,35,0.15); border-color:var(--accent-asphalt); color:var(--accent-asphalt); }
+
+  /* ── Crew mode: hide dispatcher-only elements ── */
+  body.crew-mode #rate-bar          { display:none !important; }
+  body.crew-mode #kml-bar           { display:none !important; }
+  body.crew-mode #review-section    { display:none !important; }
+  body.crew-mode #flag-counter      { display:none !important; }
+  body.crew-mode #btn-end-day       { display:none !important; }
+  body.crew-mode .btn-add-drop      { display:none !important; }
+  body.crew-mode .reorder-col       { display:none !important; }
+  body.crew-mode .pos-input         { display:none !important; }
+  body.crew-mode .stop-num.clickable { cursor:default !important; pointer-events:none; box-shadow:none !important; }
+  body.crew-mode .crew-mode-badge   { display:inline-flex !important; }
+  /* Collapse the hidden reorder column so grid doesn't leave a gap */
+  body.crew-mode .ticket-row        { grid-template-columns: 32px 1fr auto !important; }
+
+  /* ── Route panel visibility for filter ── */
+  .routes-grid.show-asphalt .panel-concrete { display:none; }
+  .routes-grid.show-concrete .panel-asphalt { display:none; }
+  .routes-grid.show-asphalt .panel-asphalt,
+  .routes-grid.show-concrete .panel-concrete { max-width:720px; margin:0 auto; }
+
+  /* Crew mode header badge */
+  .crew-mode-badge { display:none; align-items:center; gap:5px; background:rgba(52,211,153,0.12);
+    border:1px solid rgba(52,211,153,0.3); border-radius:20px; padding:4px 11px;
+    font-family:'DM Mono',monospace; font-size:11px; color:var(--success); }
+
+  /* ── Week of label ── */
+  .week-label-wrap { display:none; align-items:center; gap:8px; background:var(--surface);
+    border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:12px; }
+  .week-label-wrap.show { display:flex; }
+  .week-label-prefix { font-family:'DM Mono',monospace; font-size:10px; font-weight:700;
+    color:var(--muted); text-transform:uppercase; letter-spacing:1.5px; white-space:nowrap; }
+  .week-date-input { background:transparent; border:none; border-bottom:1px solid var(--border);
+    color:var(--text); font-family:'DM Mono',monospace; font-size:13px; font-weight:600;
+    padding:2px 6px; outline:none; width:110px; text-align:center; }
+  .week-date-input:focus { border-bottom-color:var(--warning); }
+  .week-date-input::placeholder { color:var(--muted); font-weight:400; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🗺️</div>
+  <h1>Nicor Route Builder</h1>
+  <div class="header-right">
+    <div class="search-wrap" id="search-wrap">
+      <input class="search-input" id="search-input" type="text" placeholder="🔍 Ticket #…"
+             oninput="onSearchInput(this.value)" onkeydown="if(event.key==='Escape')clearSearch()" />
+      <button class="search-clear" id="search-clear" onclick="clearSearch()" title="Clear">✕</button>
+    </div>
+    <span id="search-no-result" class="search-no-result" style="display:none">No match</span>
+    <div class="origin-badge">📍 Wauconda, IL</div>
+    <div class="flag-counter" id="flag-counter" onclick="scrollToReview()">
+      ⚠️ <span id="flag-count-num">0</span> addresses need review
+    </div>
+    <div class="skip-counter" id="skip-counter" onclick="scrollToSkipped()">
+      🚫 <span id="skip-count-num">0</span> skipped
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" />
+    <h2>Drop your Route Sheet here</h2>
+    <p>Accepts the Excel export from your dispatch system (.xlsx)</p>
+    <div class="btn-upload">📂 Choose File</div>
+  </div>
+
+  <div id="results">
+
+    <div class="banner warning" id="no-install-msg">
+      ⚠️ <strong>No 8-INSTALL tickets found.</strong> Showing all tickets as a preview — in production only 8-INSTALL tickets are routed.
+    </div>
+    <div class="banner success" id="install-msg">
+      ✅ <span id="install-count">0</span> tickets ready for routing. Route departs from <strong>Wauconda, IL</strong> and sequences stops outward by distance.
+    </div>
+    <div class="banner info" id="dual-info">
+      ℹ️ Tickets marked <strong>CONCRETE AND ASPHALT RESTORATION</strong> or <strong>MULTI TICKET REPAIR</strong> appear in both routes (<strong style="color:var(--warning)">DUAL</strong>) — each requires a separate Asphalt and Concrete service visit.
+    </div>
+
+    <!-- Crew rate input for bid costing -->
+    <div class="rate-bar" id="rate-bar" style="display:none">
+      <label>💰 Crew Rate ($/hr)</label>
+      <input type="number" class="rate-input" id="crew-rate-input" placeholder="e.g. 85" min="0" step="1" oninput="refreshAfterStatusChange()" />
+      <span class="rate-note">Used to estimate cost per ticket for rebid pricing. Optional — leave blank to show time only.</span>
+    </div>
+
+    <!-- Geocoding progress (shown while address-level coords are being fetched) -->
+    <div id="geocode-progress" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">📍 Geocoding addresses for precise routing…</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--warning)" id="geocode-status">0 / 0</span>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div id="geocode-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--warning),#fde68a);border-radius:2px;transition:width 0.3s ease"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Stops without an exact match will fall back to city-level positioning.</div>
+    </div>
+
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <!-- ── ADDRESS REVIEW SECTION ── -->
+    <div id="review-section" style="display:none">
+      <div class="review-panel">
+        <div class="review-header">
+          <h2>⚠️ Addresses Needing Review</h2>
+          <span id="resolved-count" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)"></span>
+        </div>
+        <div class="review-desc">
+          These tickets have addresses that <strong>Google Maps may not be able to find</strong>. City codes from your dispatch system (e.g. <code>Crystal_Lk</code>, <code>Round_Lk_B</code>) are <strong>resolved automatically</strong> — you never need to fix those. All addresses are assumed to be in <strong>Illinois</strong>.<br><br>
+          The issues below require a quick manual fix: <strong>Non-standard descriptors</strong> like "LONGSIDE" are stripped automatically but shown for awareness · <strong>Intersection descriptions</strong> (e.g. "NE Corner Ingleside &amp; Indian") need to be replaced with a real street address · <strong>Missing or incomplete addresses</strong> need to be looked up in your dispatch system.
+        </div>
+        <div class="fix-cards" id="fix-cards"></div>
+        <div class="apply-all-row">
+          <p>After fixing and verifying addresses above, rebuild the routes with corrected data.</p>
+          <button class="btn btn-apply" onclick="rebuildRoutes()">✅ Apply Fixes &amp; Rebuild Routes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-bar" style="flex-wrap:wrap;gap:8px">
+      <h3 style="flex:1;min-width:180px">Today's Routes — Departing Wauconda, IL</h3>
+
+      <!-- Route filter tabs -->
+      <div class="route-filter-wrap" id="route-filter-wrap">
+        <button class="rfbtn rf-active"    id="rf-all"      onclick="setRouteFilter('all')">⬛ All</button>
+        <button class="rfbtn rf-asphalt"   id="rf-asphalt"  onclick="setRouteFilter('asphalt')">🟡 Asphalt Only</button>
+        <button class="rfbtn"              id="rf-concrete" onclick="setRouteFilter('concrete')">🔵 Concrete Only</button>
+      </div>
+
+      <!-- Dispatcher / Crew toggle -->
+      <div class="view-toggle-wrap" id="view-toggle-wrap" style="display:none">
+        <button class="view-toggle-btn active-dispatcher" id="mode-dispatcher" onclick="setViewMode('dispatcher')" title="Full dispatcher view">⚙️ Dispatcher</button>
+        <button class="view-toggle-btn" id="mode-crew" onclick="setViewMode('crew')" title="Crew-facing view">👷 Crew</button>
+      </div>
+      <span class="crew-mode-badge" id="crew-badge">👷 Crew View</span>
+
+      <button class="btn btn-end-day" id="btn-end-day" onclick="openEndDayModal()" style="display:none">🏁 End Day</button>
+      <button class="btn btn-reset" onclick="resetTool()">↺ Load New File</button>
+    </div>
+
+    <!-- Progress bars (shown once any stop is completed) -->
+    <div class="progress-bar-wrap" id="progress-asphalt">
+      <div class="progress-bar-label">
+        <span>🟡 Asphalt Progress</span>
+        <span class="prog-done" id="prog-asphalt-label"></span>
+      </div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-asphalt-fill" style="width:0%"></div></div>
+    </div>
+    <div class="progress-bar-wrap" id="progress-concrete">
+      <div class="progress-bar-label">
+        <span>🔵 Concrete Progress</span>
+        <span class="prog-done" id="prog-concrete-label"></span>
+      </div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-concrete-fill" style="width:0%; background:linear-gradient(90deg,var(--accent-concrete),#93c5fd)"></div></div>
+    </div>
+
+    <!-- Week of reference label -->
+    <div class="week-label-wrap" id="week-label-wrap">
+      <span class="week-label-prefix">Week of</span>
+      <input class="week-date-input" id="week-date-input" type="text"
+             placeholder="mm/dd/yyyy" maxlength="10"
+             oninput="formatWeekDate(this)" />
+    </div>
+
+    <div class="routes-grid">
+      <div class="route-panel panel-asphalt">
+        <div class="panel-header">
+          <h2>🟡 Asphalt Route</h2>
+          <div class="panel-meta" id="asphalt-meta"></div>
+        </div>
+        <div class="tickets-list" id="asphalt-list"></div>
+        <div class="action-row">
+          <button id="maps-btn-asphalt"   class="btn btn-maps"   onclick="openMaps('asphalt')">🗺️ Google Maps</button>
+          <button id="export-btn-asphalt" class="btn btn-export" onclick="exportRoute('asphalt')">⬇️ Export Route</button>
+        </div>
+      </div>
+
+      <div class="route-panel panel-concrete">
+        <div class="panel-header">
+          <h2>🔵 Concrete Route</h2>
+          <div class="panel-meta" id="concrete-meta"></div>
+        </div>
+        <div class="tickets-list" id="concrete-list"></div>
+        <div class="action-row">
+          <button id="maps-btn-concrete"   class="btn btn-maps"   onclick="openMaps('concrete')">🗺️ Google Maps</button>
+          <button id="export-btn-concrete" class="btn btn-export" onclick="exportRoute('concrete')">⬇️ Export Route</button>
+          <button class="btn-add-drop"   onclick="openDropModal()">🪣 Add Concrete Order</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- My Maps KML export — combined, below both panels -->
+    <div id="kml-bar" style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:3px">📍 Google My Maps</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5">Export a KML file → import into <a href="https://mymaps.google.com" target="_blank" style="color:var(--accent-concrete)">mymaps.google.com</a> for color-coded pins (🔵 Asphalt · 🟢 Concrete · 🟠 Multi-Ticket) labeled with Stop # and Ticket ID.</div>
+        <div id="kml-stale-msg" style="display:none;margin-top:6px;font-size:11px;font-weight:600;color:var(--warning)">
+          ⚠️ Stop order has changed — re-export the KML to sync your My Maps pins with the current sequence.
+        </div>
+      </div>
+      <button id="kml-export-btn" class="btn btn-maps" style="background:#1a73e8;white-space:nowrap" onclick="exportKML()">⬇️ Export for My Maps (.kml)</button>
+    </div>
+
+    <!-- Skipped Summary Panel -->
+    <div class="skipped-summary" id="skipped-summary">
+      <div class="skipped-summary-header">
+        <h2>🚫 Skipped Tickets</h2>
+        <span id="skipped-summary-count" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div class="skipped-summary-desc">
+        These tickets were marked as skipped or unable to complete during today's route.
+        Export this list to update your master file — it includes the skip reason and any notes your crew added.
+      </div>
+      <div class="skipped-rows" id="skipped-rows"></div>
+      <div class="skipped-summary-actions">
+        <p>Export this list to update your CSI 3000 master file with today's skipped tickets.</p>
+        <button class="btn btn-export" onclick="exportSkipped()">⬇️ Export Skipped List</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Concrete Order Modal -->
+<div class="modal-bg" id="drop-modal">
+  <div class="modal" style="max-width:400px">
+    <h3 style="color:#a78bfa">🪣 Add Concrete Order</h3>
+    <p>Adds a concrete order stop to the route. Drag or use ▲▼ to position it in the sequence.</p>
+    <label class="drop-label">Delivery Time</label>
+    <input type="time" class="drop-input" id="drop-time" />
+    <label class="drop-label">Mix Number</label>
+    <input type="text"  class="drop-input" id="drop-mix"  placeholder="e.g. 4000 PSI, Mix #7, Standard Gray" />
+    <label class="drop-label">Address (optional — for map pin)</label>
+    <input type="text"  class="drop-input" id="drop-addr" placeholder="e.g. 1200 Walnut St, McHenry, IL" />
+    <label class="drop-label">Notes (optional)</label>
+    <input type="text"  class="drop-input" id="drop-notes" placeholder="e.g. Stage near manhole, 3 yards" />
+    <div class="modal-actions">
+      <button class="btn btn-add-drop" onclick="confirmAddDrop()">🪣 Add to Route</button>
+      <button class="btn btn-reset"    onclick="document.getElementById('drop-modal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- End of Day Modal -->
+<div class="modal-bg" id="eod-modal">
+  <div class="modal eod-modal">
+    <h3>🏁 End of Day — Wrap Up</h3>
+    <p style="margin-bottom:14px">This will download a two-sheet report: an <strong>Action List</strong> for what to update in CSI 3000 today, and a <strong>Day Summary</strong> with skip reasons and problem cities to help you dispatch smarter over time.</p>
+    <div class="eod-stats-grid" id="eod-stats-grid"></div>
+
+    <div id="eod-last-stop-section">
+      <div class="eod-section-label">Last Completed Stop — Crew's End Point</div>
+      <div class="last-stop-box" id="eod-last-stop-box"></div>
+    </div>
+
+    <div id="eod-remaining-note" style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px;padding:10px 12px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;display:none">
+      📋 <strong style="color:var(--warning)">Skipped tickets need action in CSI 3000.</strong>
+      The report will tell you exactly which ones to pull back and reschedule.
+      Tickets not reached today — leave them as 8-INSTALL and they'll appear in tomorrow's export automatically.
+    </div>
+
+    <div class="eod-actions">
+      <button class="btn-carryover" onclick="confirmEndDay()">🏁 End Day &amp; Save Progress</button>
+      <button class="btn btn-reset" onclick="document.getElementById('eod-modal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Skip Reason Modal -->
+<div class="modal-bg" id="skip-modal">
+  <div class="modal skip-modal">
+    <h3>🚫 Mark Ticket as Skipped</h3>
+    <p id="skip-modal-ticket-info" style="color:var(--text);font-size:13px;font-weight:600;margin-bottom:12px"></p>
+    <p>Select the reason this stop could not be completed:</p>
+    <div class="skip-reason-grid">
+      <button class="reason-btn" onclick="selectReason(this, 'No Access')">
+        <span class="reason-icon">🔒</span>No Access
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Weather – Cannot Complete')">
+        <span class="reason-icon">🌧️</span>Weather
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Wrong Address')">
+        <span class="reason-icon">📍</span>Wrong Address
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Customer Not Ready')">
+        <span class="reason-icon">🏠</span>Customer Not Ready
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Equipment Issue')">
+        <span class="reason-icon">🔧</span>Equipment Issue
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Materials Issue')">
+        <span class="reason-icon">📦</span>Materials Issue
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Safety Concern')">
+        <span class="reason-icon">⚠️</span>Safety Concern
+      </button>
+      <button class="reason-btn" onclick="selectReason(this, 'Other')">
+        <span class="reason-icon">✏️</span>Other
+      </button>
+    </div>
+    <div class="skip-note-label">Additional Notes (optional)</div>
+    <textarea class="skip-note-input" id="skip-note-input" placeholder="e.g. gate was locked, called customer — no answer. Rescheduling needed."></textarea>
+    <div class="skip-modal-actions">
+      <button class="btn btn-confirm-skip" id="btn-confirm-skip" onclick="confirmSkip()" disabled>🚫 Confirm Skip</button>
+      <button class="btn btn-reset" onclick="closeSkipModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Maps Modal -->
+<div class="modal-bg" id="maps-modal">
+  <div class="modal">
+    <h3 id="modal-title">🗺️ Open in Google Maps</h3>
+    <p>Route starts from <strong>Wauconda, IL</strong>. Google Maps supports 10 waypoints per URL — if your route has more stops, multiple legs are shown below. Open each in sequence.</p>
+    <div class="url-box" id="maps-url-display"></div>
+    <div class="modal-actions" id="maps-links"></div>
+    <div style="margin-top:12px"><button class="btn btn-reset" onclick="document.getElementById('maps-modal').classList.remove('show')">Close</button></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+//  CITY NAME MAP  (dispatch system codes → proper names)
+// ─────────────────────────────────────────────────────────
+// Client-confirmed city code → full city name mappings.
+// These are the exact codes the client's dispatch system exports.
+// All addresses are in Illinois.
+const CITY_NAMES = {
+  // Client-confirmed codes
+  'round_lk_b':  'Round Lake Beach',
+  'lake_in_th':  'Lake in the Hills',
+  'spring_gro':  'Spring Grove',
+  'crystal_lk':  'Crystal Lake',
+  'fox_lake':    'Fox Lake',
+  'deep_lake':   'Deep Lake',
+  'fox_lake_h':  'Fox Lake Hills',
+  'wonder_lak':  'Wonder Lake',
+  'mccullom_l':  'McCullom Lake',
+  // Other abbreviations present in the dataset
+  'lake_zuric':  'Lake Zurich',
+  'lake_villa':  'Lake Villa',
+};
+
+// ZIP codes for areas Google Maps may still struggle to resolve by name alone.
+// Client-confirmed cities (above) are trusted as-is; ZIPs here are a fallback
+// for any remaining ambiguous or very small unincorporated areas.
+const CITY_ZIPS = {
+  'mccullom lake': '60050',
+  'wonder lake':   '60097',
+  'fox lake hills':'60020',
+  'deep lake':     '60041',
+  'spring grove':  '60081',
+  'volo':          '60073',
+};
+
+const CITY_COORDS = {
+  'waukegan':          { lat: 42.3636, lng: -87.8448 },
+  'antioch':           { lat: 42.4767, lng: -88.0956 },
+  'ingleside':         { lat: 42.3978, lng: -88.1484 },
+  'crystal lake':      { lat: 42.2414, lng: -88.3162 },
+  'huntley':           { lat: 42.1683, lng: -88.4281 },
+  'woodstock':         { lat: 42.3147, lng: -88.4487 },
+  'mchenry':           { lat: 42.3314, lng: -88.2626 },
+  'round lake beach':  { lat: 42.3567, lng: -88.0845 },
+  'cary':              { lat: 42.2122, lng: -88.2384 },
+  'johnsburg':         { lat: 42.3867, lng: -88.2434 },
+  'lake in the hills': { lat: 42.3592, lng: -88.0692 },
+  'fox lake':          { lat: 42.3978, lng: -88.1802 },
+  'fox lake hills':    { lat: 42.4200, lng: -88.2000 },
+  'algonquin':         { lat: 42.1659, lng: -88.2995 },
+  'lake zurich':       { lat: 42.1997, lng: -88.0870 },
+  'lake villa':        { lat: 42.4167, lng: -88.0819 },
+  'richmond':          { lat: 42.4733, lng: -88.3040 },
+  'ridgefield':        { lat: 42.3950, lng: -88.2100 },
+  'spring grove':      { lat: 42.4406, lng: -88.2290 },
+  'lakemoor':          { lat: 42.3375, lng: -88.1942 },
+  'deep lake':         { lat: 42.4292, lng: -88.1600 },
+  'marengo':           { lat: 42.2483, lng: -88.6075 },
+  'harvard':           { lat: 42.4228, lng: -88.6128 },
+  'mccullom lake':     { lat: 42.3900, lng: -88.2800 },
+  'volo':              { lat: 42.3308, lng: -88.1667 },
+  'wonder lake':       { lat: 42.3836, lng: -88.3411 },
+  'wauconda':          { lat: 42.2583, lng: -88.1389 },
+  'lawrence':          { lat: 42.3314, lng: -88.2626 },
+};
+
+const ORIGIN = { lat: 42.2583, lng: -88.1389, label: 'Wauconda, IL' };
+
+// ─────────────────────────────────────────────────────────
+//  ADDRESS VALIDATION
+//  Returns array of flag objects for any address that
+//  Google Maps is likely to reject or misroute
+// ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+//  ADDRESS VALIDATION
+//  City codes from the client's dispatch system are TRUSTED
+//  and resolved automatically via CITY_NAMES — they are never
+//  flagged for review. All addresses are assumed to be in IL.
+//  Only flags genuine problems a human needs to fix.
+// ─────────────────────────────────────────────────────────
+function validateAddress(ticket) {
+  const flags = [];
+  const addr    = (ticket.dispatch_address1 || '').trim();
+  const cityRaw = (ticket.dispatch_city || '').trim();
+
+  // 1. Non-standard address descriptor (LONGSIDE, REAR, etc.)
+  //    These are stripped automatically but flagged so the crew
+  //    knows the address was cleaned.
+  if (/\s*-\s*(LONGSIDE|REAR|SIDE|BACK|FRONT)/i.test(addr)) {
+    flags.push({
+      type: 'nonstandard_descriptor',
+      severity: 'medium',
+      message: `Address contains a non-standard descriptor ("${addr}") — stripped automatically for routing`,
+      suggestion: `Cleaned to: "${addr.replace(/\s*-\s*(LONGSIDE|REAR|SIDE|BACK|FRONT)\s*/gi,'').trim()}"`,
+      autoFixed: true,
+    });
+  }
+
+  // 2. Intersection / corner description — no street number, cannot be geocoded
+  if (/^(NE|NW|SE|SW|N|S|E|W)\s+corner/i.test(addr) || /^corner\s+of/i.test(addr)) {
+    flags.push({
+      type: 'intersection',
+      severity: 'high',
+      message: `"${addr}" is an intersection description — Google Maps needs a numbered street address`,
+      suggestion: `Use cross-street format: e.g. "Ingleside Ave & Indian Ln, Ingleside, IL"`,
+      autoFixed: false,
+    });
+  }
+
+  // 3. No address at all
+  if (!addr) {
+    flags.push({
+      type: 'missing',
+      severity: 'critical',
+      message: `No address on ticket #${ticket.unique_idn}`,
+      suggestion: `Look up the address in your dispatch system and enter it manually`,
+      autoFixed: false,
+    });
+  }
+
+  // 4. Address suspiciously short (likely truncated or just a number)
+  if (addr.length > 0 && addr.length < 6) {
+    flags.push({
+      type: 'too_short',
+      severity: 'high',
+      message: `Address "${addr}" looks incomplete — may be missing a street name`,
+      suggestion: `Verify the full address in your dispatch system`,
+      autoFixed: false,
+    });
+  }
+
+  // 5. No city at all
+  if (!cityRaw) {
+    flags.push({
+      type: 'missing_city',
+      severity: 'critical',
+      message: `No city on ticket #${ticket.unique_idn}`,
+      suggestion: `Add the city from your dispatch system`,
+      autoFixed: false,
+    });
+  }
+
+  return flags;
+}
+
+function cleanAddressForMaps(addr, city, state = 'IL', zip = '') {
+  // Strip unit/suite suffixes
+  let clean = addr.replace(/\s+(STE|APT|BLDG|UNIT|#)\s*[\w-]+/gi, '').trim();
+  // Strip LONGSIDE / REAR / etc.
+  clean = clean.replace(/\s*-\s*(LONGSIDE|REAR|SIDE|BACK|FRONT)\s*/gi, '').trim();
+  const cityPretty = CITY_NAMES[city.toLowerCase()] || city.replace(/_/g, ' ');
+  const parts = [clean, cityPretty, state];
+  if (zip) parts.push(zip);
+  return parts.join(', ');
+}
+
+// ─────────────────────────────────────────────────────────
+//  SCOPE
+// ─────────────────────────────────────────────────────────
+function getScope(ticket) {
+  const desc = (ticket.description_of_repair || '').trim().toUpperCase();
+  if (desc === 'CONCRETE AND ASPHALT RESTRATION' || desc === 'CONCRETE AND ASPHALT RESTORATION' || desc === 'MULTI TICKET REPAIR') return 'both';
+  if (desc.includes('CONCRETE') && desc.includes('ASPHALT')) return 'both';
+  if (desc.includes('CONCRETE')) return 'concrete';
+  return 'asphalt';
+}
+
+// ─────────────────────────────────────────────────────────
+//  GEO
+// ─────────────────────────────────────────────────────────
+function haversine(a, b) {
+  const R = 3958.8;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+function getCityCoords(cityRaw) {
+  const key1 = cityRaw.trim().toLowerCase().replace(/_/g, ' ');
+  const key2 = (CITY_NAMES[cityRaw.trim().toLowerCase()] || '').toLowerCase();
+  return CITY_COORDS[key1] || CITY_COORDS[key2] || null;
+}
+
+function routeFromOrigin(tickets) {
+  const skipped = [], withCoords = [];
+  tickets.forEach(t => {
+    // Prefer address-level coords, fall back to verified coords, then city coords
+    const coords = t._addrCoords || t._verifiedCoords || getCityCoords(t._resolvedCity || t.dispatch_city || '');
+    if (!coords) skipped.push(t);
+    else withCoords.push({ ...t, _coords: coords });
+  });
+
+  // Nearest-neighbor on individual stop coordinates
+  const visited = new Array(withCoords.length).fill(false);
+  const ordered = [];
+  let current = ORIGIN;
+
+  for (let i = 0; i < withCoords.length; i++) {
+    let bestIdx = -1, bestDist = Infinity;
+    withCoords.forEach((t, idx) => {
+      if (visited[idx]) return;
+      const d = haversine(current, t._coords);
+      if (d < bestDist) { bestDist = d; bestIdx = idx; }
+    });
+    if (bestIdx < 0) break;
+    visited[bestIdx] = true;
+    const t = withCoords[bestIdx];
+
+    // Detect city change for header rendering
+    const prevCity = ordered.length > 0 ? ordered[ordered.length - 1]._cityLabel : null;
+    const thisCity = (CITY_NAMES[(t._resolvedCity || t.dispatch_city || '').trim().toLowerCase()]
+                   || (t._resolvedCity || t.dispatch_city || '').replace(/_/g, ' ')).trim();
+    t._isFirstInCity = thisCity !== prevCity;
+    t._cityLabel     = thisCity;
+    t._distFromPrev  = haversine(current, t._coords);
+    t._distFromStart = haversine(ORIGIN,  t._coords);
+
+    ordered.push(t);
+    current = t._coords;
+  }
+
+  return { routed: ordered, skipped };
+}
+
+// ─────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────
+let allActive      = [];
+let asphaltRoute   = [];
+let concreteRoute  = [];
+let flaggedTickets = [];
+let fixState       = {};
+let skipState      = {};    // { reason, note, skippedAt, route }
+let completeState  = {};    // { completedAt, route, startedAt, onSiteMin, driveMin }
+let startState     = {};    // { startedAt: Date ISO, route }
+
+// ─────────────────────────────────────────────────────────
+//  FILE HANDLING
+// ─────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      parseTickets(rows);
+    } catch { alert('Could not read file. Please use a valid .xlsx export.'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─────────────────────────────────────────────────────────
+//  PARSE
+// ─────────────────────────────────────────────────────────
+function parseTickets(rows) {
+  const tickets = rows.map(row => {
+    const t = {};
+    for (const k in row) t[k.trim()] = typeof row[k] === 'string' ? row[k].trim() : row[k];
+    return t;
+  });
+
+  const installOnly = tickets.filter(t => (t.dispatch_status_code||'') === '8-INSTALL');
+  const showAll = installOnly.length === 0;
+  document.getElementById('no-install-msg').classList.toggle('show', showAll);
+  document.getElementById('install-msg').classList.toggle('show', !showAll);
+  allActive = showAll ? tickets : installOnly;
+  if (!showAll) document.getElementById('install-count').textContent = allActive.length;
+
+  // Validate all addresses
+  flaggedTickets = [];
+  fixState = {};
+  allActive.forEach(t => {
+    const flags = validateAddress(t);
+    if (flags.length > 0) {
+      t._flags = flags;
+      t._isFlagged = true;
+      // Pre-fill fix state with auto-cleaned values
+      // Resolve city name via the client code lookup; fall back to replacing underscores
+      const cityKey     = (t.dispatch_city||'').trim().toLowerCase();
+      const cityResolved = CITY_NAMES[cityKey] || t.dispatch_city.replace(/_/g,' ').trim();
+      const cityZip     = CITY_ZIPS[cityResolved.toLowerCase()] || '';
+
+      // Auto-clean the address: strip LONGSIDE/REAR descriptors
+      // (unit/suite suffixes are kept — Google Maps handles those fine)
+      let addrClean = (t.dispatch_address1||'')
+        .replace(/\s*-\s*(LONGSIDE|REAR|SIDE|BACK|FRONT)\s*/gi, '')
+        .trim();
+
+      fixState[t.unique_idn] = {
+        addr:         addrClean,
+        city:         cityResolved,
+        zip:          cityZip,
+        verified:     false,
+        verifiedAddr: null,
+      };
+      // dedupe by idn
+      if (!flaggedTickets.find(x => x.unique_idn === t.unique_idn)) {
+        flaggedTickets.push(t);
+      }
+    } else {
+      t._isFlagged = false;
+    }
+  });
+
+  const dualCount = allActive.filter(t => getScope(t) === 'both').length;
+  document.getElementById('dual-info').classList.toggle('show', dualCount > 0);
+
+  updateFlagCounter();
+  renderReviewPanel();
+
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('results').classList.add('show');
+
+  // Geocode all ticket addresses at address-level before routing
+  geocodeAllTickets();
+}
+
+// ─────────────────────────────────────────────────────────
+//  REVIEW PANEL
+// ─────────────────────────────────────────────────────────
+function renderReviewPanel() {
+  const section = document.getElementById('review-section');
+  const cards   = document.getElementById('fix-cards');
+
+  if (!flaggedTickets.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  updateResolvedCount();
+
+  cards.innerHTML = flaggedTickets.map(t => {
+    const fs = fixState[t.unique_idn];
+    const topFlag = t._flags[0];
+    const isResolved = fs.verified;
+    const severityIcon = topFlag.severity === 'critical' ? '🔴' : topFlag.severity === 'high' ? '🟠' : topFlag.severity === 'medium' ? '🟡' : '🟢';
+
+    return `
+    <div class="fix-card${isResolved ? ' resolved' : ''}" id="fix-card-${t.unique_idn}">
+      <div class="fix-top">
+        <div class="flag-icon">${isResolved ? '✅' : severityIcon}</div>
+        <div class="fix-ticket-info" style="flex:1">
+          <div class="ticket-id">Ticket #${t.unique_idn} · ${(t.description_of_repair||'').trim()}</div>
+          <div class="original-addr">📍 Original: ${t.dispatch_address1}, ${t.dispatch_city}</div>
+          <div class="flag-reason">⚠️ ${topFlag.message}</div>
+          <div class="fix-suggestion">
+            ${isResolved ? `✅ Verified: ${fs.verifiedAddr}` : `💡 ${topFlag.suggestion}`}
+          </div>
+          ${t._flags.slice(1).map(f => `<div class="flag-reason" style="margin-top:2px;color:var(--muted)">↳ Also: ${f.message}</div>`).join('')}
+        </div>
+      </div>
+      <div class="fix-inputs">
+        <div>
+          <label>Street Address</label>
+          <input type="text" class="fix-input ${isResolved ? 'input-ok' : ''}"
+            id="addr-${t.unique_idn}"
+            value="${escHtml(fs.addr)}"
+            placeholder="123 Main St"
+            oninput="onFixChange('${t.unique_idn}')" />
+        </div>
+        <div>
+          <label>City, IL &nbsp;&nbsp; <span style="color:var(--muted)">ZIP (optional)</span></label>
+          <div style="display:flex;gap:6px">
+            <input type="text" class="fix-input ${isResolved ? 'input-ok' : ''}"
+              id="city-${t.unique_idn}"
+              value="${escHtml(fs.city)}"
+              placeholder="Crystal Lake"
+              oninput="onFixChange('${t.unique_idn}')"
+              style="flex:1" />
+            <input type="text" class="fix-input ${isResolved ? 'input-ok' : ''}"
+              id="zip-${t.unique_idn}"
+              value="${escHtml(fs.zip)}"
+              placeholder="60014"
+              oninput="onFixChange('${t.unique_idn}')"
+              style="width:72px" />
+          </div>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button class="btn-verify${isResolved ? ' verifying' : ''}" id="btn-verify-${t.unique_idn}" onclick="verifyAddress('${t.unique_idn}')">
+            ${isResolved ? '<span class="spinner"></span>' : '🔍 Verify'}
+          </button>
+        </div>
+      </div>
+      <div class="verify-result" id="verify-result-${t.unique_idn}"></div>
+    </div>`;
+  }).join('');
+
+  // Restore button states
+  flaggedTickets.forEach(t => {
+    if (fixState[t.unique_idn].verified) {
+      const btn = document.getElementById(`btn-verify-${t.unique_idn}`);
+      if (btn) { btn.innerHTML = '✅ Verified'; btn.classList.remove('verifying'); }
+    }
+  });
+}
+
+function updateResolvedCount() {
+  const total    = flaggedTickets.length;
+  const resolved = flaggedTickets.filter(t => fixState[t.unique_idn]?.verified).length;
+  document.getElementById('resolved-count').textContent = `${resolved} of ${total} resolved`;
+}
+
+function updateFlagCounter() {
+  const counter = document.getElementById('flag-counter');
+  const total   = flaggedTickets.length;
+  document.getElementById('flag-count-num').textContent = total;
+  counter.classList.toggle('show', total > 0);
+}
+
+function scrollToReview() {
+  document.getElementById('review-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function onFixChange(idn) {
+  const fs = fixState[idn];
+  if (!fs) return;
+  fs.addr     = document.getElementById(`addr-${idn}`)?.value || fs.addr;
+  fs.city     = document.getElementById(`city-${idn}`)?.value || fs.city;
+  fs.zip      = document.getElementById(`zip-${idn}`)?.value  || '';
+  fs.verified = false;
+  fs.verifiedAddr = null;
+  const btn = document.getElementById(`btn-verify-${idn}`);
+  if (btn) { btn.innerHTML = '🔍 Verify'; btn.classList.remove('verifying'); }
+  const res = document.getElementById(`verify-result-${idn}`);
+  if (res) res.classList.remove('show');
+}
+
+// ─────────────────────────────────────────────────────────
+//  ADDRESS VERIFICATION via Google Maps Geocoding API
+//  We use the free open Nominatim API (OpenStreetMap) as a
+//  no-API-key alternative to verify addresses work
+// ─────────────────────────────────────────────────────────
+async function verifyAddress(idn) {
+  const fs  = fixState[idn];
+  const btn = document.getElementById(`btn-verify-${idn}`);
+  const res = document.getElementById(`verify-result-${idn}`);
+
+  const addrParts = [fs.addr, fs.city, 'IL'];
+  if (fs.zip) addrParts.push(fs.zip);
+  addrParts.push('USA');
+  const query = addrParts.join(', ');
+
+  btn.innerHTML = '<span class="spinner"></span> Checking…';
+  btn.classList.add('verifying');
+  res.className = 'verify-result';
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=us`;
+    const resp = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await resp.json();
+
+    if (data && data.length > 0) {
+      const match = data[0];
+      const displayName = match.display_name;
+      fs.verified     = true;
+      fs.verifiedAddr = query;
+      fs.verifiedLat  = parseFloat(match.lat);
+      fs.verifiedLng  = parseFloat(match.lon);
+
+      btn.innerHTML = '✅ Verified';
+      btn.classList.remove('verifying');
+      res.className = 'verify-result ok show';
+      res.innerHTML = `✅ Found: ${displayName.split(',').slice(0,4).join(',')}`;
+
+      // Update fix-card styling
+      const card = document.getElementById(`fix-card-${idn}`);
+      if (card) {
+        card.classList.add('resolved');
+        const flagReason = card.querySelector('.flag-reason');
+        if (flagReason) flagReason.style.display = 'none';
+        const suggestion = card.querySelector('.fix-suggestion');
+        if (suggestion) { suggestion.style.color = 'var(--success)'; suggestion.textContent = `✅ Verified: ${query}`; }
+        ['addr','city','zip'].forEach(f => {
+          const el = document.getElementById(`${f}-${idn}`);
+          if (el) { el.classList.remove('input-error'); el.classList.add('input-ok'); }
+        });
+      }
+      updateResolvedCount();
+
+    } else {
+      btn.innerHTML = '⚠️ Not Found';
+      btn.classList.remove('verifying');
+      res.className = 'verify-result err show';
+      res.innerHTML = `❌ Google Maps could not find: <em>${query}</em><br>
+        Try adding the ZIP code, spelling out the full city name, or using a nearby well-known address.`;
+      ['addr','city','zip'].forEach(f => {
+        const el = document.getElementById(`${f}-${idn}`);
+        if (el) { el.classList.add('input-error'); el.classList.remove('input-ok'); }
+      });
+    }
+  } catch (err) {
+    btn.innerHTML = '🔍 Retry';
+    btn.classList.remove('verifying');
+    res.className = 'verify-result warn show';
+    res.innerHTML = `⚠️ Could not connect to verification service. Check your internet and try again.`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  ADDRESS-LEVEL GEOCODING (Nominatim)
+// ─────────────────────────────────────────────────────────
+// Cache so dual-scope tickets sharing the same address only hit the API once
+const geocodeCache = {};
+
+async function nominatimGeocode(street, city, zip) {
+  const cacheKey = `${street}|${city}|${zip}`;
+  if (geocodeCache[cacheKey] !== undefined) return geocodeCache[cacheKey];
+
+  // IL bounding box: sw(41.47,-90.14) ne(42.51,-87.02) — keeps results inside Illinois
+  const viewbox   = '-90.14,41.47,-87.02,42.51';
+  const params    = new URLSearchParams({
+    format:       'json',
+    limit:        '1',
+    countrycodes: 'us',
+    viewbox,
+    bounded:      '1',
+    street,
+    city,
+    state:        'Illinois',
+    country:      'United States',
+    postalcode:   zip || '',
+  });
+  if (!zip) params.delete('postalcode');
+
+  try {
+    const res  = await fetch(`https://nominatim.openstreetmap.org/search?${params}`,
+                             { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (data && data[0]) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      // Sanity check: must be within Illinois/Wisconsin border area (lat 41.4–42.6, lng -91 to -87)
+      if (lat >= 41.4 && lat <= 42.6 && lng >= -91 && lng <= -87) {
+        const coords = { lat, lng };
+        geocodeCache[cacheKey] = coords;
+        return coords;
+      }
+    }
+  } catch(e) {}
+  geocodeCache[cacheKey] = null;
+  return null;
+}
+
+async function geocodeAllTickets() {
+  // De-dupe: geocode each unique address once (dual-scope tickets share the same address)
+  const unique = {};
+  allActive.forEach(t => {
+    const cityRaw    = t._resolvedCity || t.dispatch_city || '';
+    const cityPretty = CITY_NAMES[cityRaw.trim().toLowerCase()] || cityRaw.replace(/_/g, ' ').trim();
+    const cityZip    = CITY_ZIPS[cityPretty.toLowerCase()] || '';
+    const street     = (t._resolvedAddr
+                        ? t._resolvedAddr.split(',')[0]
+                        : (t.dispatch_address1 || '')).trim();
+    unique[String(t.unique_idn)] = { street, city: cityPretty, zip: cityZip };
+  });
+
+  const idns  = Object.keys(unique);
+  const total = idns.length;
+
+  const prog  = document.getElementById('geocode-progress');
+  const bar   = document.getElementById('geocode-bar');
+  const stat  = document.getElementById('geocode-status');
+  prog.style.display = 'block';
+  bar.style.width    = '0%';
+  stat.textContent   = `0 / ${total}`;
+
+  let done = 0;
+  for (const idn of idns) {
+    const { street, city, zip } = unique[idn];
+    const coords = await nominatimGeocode(street, city, zip);
+    // Write _addrCoords onto all matching allActive tickets (dual-scope share same idn)
+    allActive.forEach(t => {
+      if (String(t.unique_idn) === idn) t._addrCoords = coords || null;
+    });
+    done++;
+    bar.style.width  = `${Math.round((done / total) * 100)}%`;
+    stat.textContent = `${done} / ${total}`;
+    // Nominatim rate limit: max 1 request/second
+    await new Promise(r => setTimeout(r, 1100));
+  }
+
+  prog.style.display = 'none';
+  buildAndRenderRoutes();
+}
+
+// ─────────────────────────────────────────────────────────
+//  BUILD & RENDER ROUTES
+// ─────────────────────────────────────────────────────────
+function buildAndRenderRoutes() {
+  // Apply any verified fixes to the ticket objects
+  allActive.forEach(t => {
+    const fs = fixState[t.unique_idn];
+    if (fs && fs.verified) {
+      t._resolvedAddr   = `${fs.addr}, ${fs.city}${fs.zip ? ', ' + fs.zip : ''}, IL`;
+      t._resolvedCity   = fs.city;
+      t._verifiedCoords = fs.verifiedLat ? { lat: fs.verifiedLat, lng: fs.verifiedLng } : null;
+    }
+  });
+
+  const aspPool = [], conPool = [];
+  let dualCount = 0;
+  allActive.forEach(t => {
+    const scope = getScope(t);
+    if (scope === 'asphalt') { aspPool.push({ ...t, _isDual: false }); }
+    else if (scope === 'concrete') { conPool.push({ ...t, _isDual: false }); }
+    else { aspPool.push({ ...t, _isDual: true }); conPool.push({ ...t, _isDual: true }); dualCount++; }
+  });
+
+  const aspResult = routeFromOrigin(aspPool);
+  const conResult = routeFromOrigin(conPool);
+  asphaltRoute   = aspResult.routed;
+  concreteRoute  = conResult.routed;
+
+  const aspMiles = totalMiles(asphaltRoute);
+  const conMiles = totalMiles(concreteRoute);
+
+  const flagCount = allActive.filter(t => t._isFlagged && !fixState[t.unique_idn]?.verified).length;
+
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-card total">
+      <div class="label">Total Tickets</div>
+      <div class="value">${allActive.length}</div>
+    </div>
+    <div class="stat-card asphalt">
+      <div class="label">Asphalt Stops</div>
+      <div class="value">${asphaltRoute.length}</div>
+    </div>
+    <div class="stat-card concrete">
+      <div class="label">Concrete Stops</div>
+      <div class="value">${concreteRoute.length}</div>
+    </div>
+    <div class="stat-card dual">
+      <div class="label">Dual-Scope</div>
+      <div class="value">${dualCount}</div>
+    </div>
+    <div class="stat-card flagged">
+      <div class="label">Needs Review</div>
+      <div class="value">${flagCount}</div>
+    </div>
+  `;
+
+  document.getElementById('asphalt-meta').innerHTML  = `${asphaltRoute.length} stops · ~${aspMiles.toFixed(0)} mi`;
+  document.getElementById('concrete-meta').innerHTML = `${concreteRoute.length} stops · ~${conMiles.toFixed(0)} mi`;
+  document.getElementById('rate-bar').style.display  = 'flex';
+  document.getElementById('search-wrap').classList.add('show');
+  document.getElementById('view-toggle-wrap').style.display = 'flex';
+  document.getElementById('route-filter-wrap').classList.add('show');
+  document.getElementById('week-label-wrap').classList.add('show');
+
+  renderList('asphalt',  asphaltRoute);
+  renderList('concrete', concreteRoute);
+  updateSkipCounter();
+  renderSkippedSummary();
+}
+
+function rebuildRoutes() {
+  // Clear address-level coords so verified fixes get re-geocoded at their corrected addresses
+  allActive.forEach(t => {
+    const fs = fixState[t.unique_idn];
+    if (fs && fs.verified) {
+      t._addrCoords = null; // will be re-geocoded with corrected address
+      // Clear all cache entries for this ticket's address so it re-geocodes with corrected data
+      Object.keys(geocodeCache).forEach(k => { if (k.startsWith(fs.addr + '|')) delete geocodeCache[k]; });
+    }
+  });
+  renderReviewPanel();
+  updateFlagCounter();
+  geocodeAllTickets();
+}
+
+function totalMiles(tickets) {
+  let total = 0, prev = ORIGIN;
+  tickets.forEach(t => {
+    const c = t._verifiedCoords || t._coords;
+    if (c) { total += haversine(prev, c); prev = c; }
+  });
+  return total;
+}
+
+// ─────────────────────────────────────────────────────────
+//  RENDER LIST
+// ─────────────────────────────────────────────────────────
+function renderList(scope, tickets) {
+  const listEl = document.getElementById(`${scope}-list`);
+  if (!tickets.length) { listEl.innerHTML = '<div class="empty">No stops in this route.</div>'; return; }
+
+  const color = scope === 'asphalt' ? 'asphalt' : 'concrete';
+  let html = `
+    <div class="ticket-row origin-tag">
+      <div class="reorder-col"></div>
+      <div class="stop-num origin">🚛</div>
+      <div class="ticket-info">
+        <div class="address">DISPATCH ORIGIN</div>
+        <div class="meta"><span>📍 Wauconda, IL</span></div>
+      </div>
+      <div class="card-right-col">
+        <div class="dist-tag"><span class="mi">0.0 mi</span>start</div>
+      </div>
+    </div>`;
+
+  let stopNum = 1;
+  tickets.forEach(t => {
+    const addr       = t._resolvedAddr ? t._resolvedAddr.split(',')[0] : (t.dispatch_address1||'').trim();
+    const city       = (t._resolvedCity || t._cityLabel || t.dispatch_city||'').replace(/_/g,' ');
+    const csi        = t.unique_idn || '';
+    const orderNo    = (t.customer_order_no || '').toString().trim();
+    const work       = (t.dispatch_work_requested||'').trim().replace(/\n/g,' · ').substring(0,110);
+    const dual       = t._isDual;
+    const flagged    = t._isFlagged && !fixState[t.unique_idn]?.verified;
+    const fixed      = t._isFlagged && fixState[t.unique_idn]?.verified;
+    const dist       = t._distFromStart ? t._distFromStart.toFixed(1) : '—';
+    const leg        = t._distFromPrev  ? t._distFromPrev.toFixed(1)  : null;
+
+    // ── Concrete Order card (special rendering) ──
+    if (t._isDrop) {
+      const fmtTime = t._dropTime
+        ? new Date('1970-01-01T' + t._dropTime).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+        : '';
+      html += `
+        <div class="ticket-row mat-drop" id="ticket-row-${t.unique_idn}"
+             draggable="true" data-idn="${t.unique_idn}" data-scope="${scope}"
+             ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
+             ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+          <div class="reorder-col">
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
+            <button class="btn-move" onclick="moveStop('${scope}','${t.unique_idn}',-1)" ${stopNum===1?'disabled':''}>▲</button>
+            <button class="btn-move" onclick="moveStop('${scope}','${t.unique_idn}', 1)" ${stopNum===tickets.length?'disabled':''}>▼</button>
+          </div>
+          <div class="stop-num-wrap">
+            <div class="stop-num concrete clickable"
+                 style="background:rgba(167,139,250,0.15);color:#a78bfa"
+                 title="Click to jump to position"
+                 onclick="togglePosInput('${t.unique_idn}','${scope}',${stopNum},${tickets.length},this)">
+              ${stopNum}
+            </div>
+            <input class="pos-input" id="pos-${t.unique_idn}"
+              type="number" min="1" max="${tickets.length}" placeholder="${stopNum}"
+              onkeydown="onPosKey(event,'${t.unique_idn}','${scope}',${tickets.length})"
+              onblur="hidePosInput('${t.unique_idn}')" />
+          </div>
+          <div class="ticket-info">
+            <div class="address">🪣 Concrete Order <span class="mat-drop-badge">DROP</span></div>
+            ${t._dropTime  ? `<div class="mat-drop-detail">⏰ Delivery Time: ${fmtTime}</div>` : ''}
+            ${t._dropMix   ? `<div class="mat-drop-detail">🧱 Mix: ${t._dropMix}</div>` : ''}
+            ${t._dropNotes ? `<div class="mat-drop-detail">📝 ${t._dropNotes}</div>` : ''}
+            ${t.dispatch_address1 && t.dispatch_address1 !== 'Concrete Order'
+              ? `<div class="mat-drop-detail">📍 ${t.dispatch_address1}</div>` : ''}
+          </div>
+          <div class="card-right-col">
+            <button class="btn-remove-drop" onclick="removeDrop('${t.unique_idn}')">✕ Remove</button>
+          </div>
+        </div>`;
+      stopNum++;
+      return;
+    }
+
+    if (t._isFirstInCity) {
+      html += `
+        <div class="segment-header">
+          <div class="seg-line"></div>
+          📍 ${city}
+          ${leg ? `<span class="miles-tag">+${leg} mi</span>` : ''}
+          <div class="seg-line"></div>
+        </div>`;
+    }
+
+    const isSkipped   = !!skipState[String(t.unique_idn)];
+    const isCompleted = !!completeState[String(t.unique_idn)];
+    const isStarted   = !!startState[String(t.unique_idn)] && !isCompleted;
+    const sk  = skipState[String(t.unique_idn)];
+    const cmp = completeState[String(t.unique_idn)];
+
+    // Row border class
+    let rowClass = '';
+    if      (isCompleted) rowClass = 'completed-ticket';
+    else if (isSkipped)   rowClass = 'skipped-ticket';
+    else if (isStarted)   rowClass = 'active-stop';
+    else if (flagged)     rowClass = 'flagged-row';
+    else if (fixed)       rowClass = 'fixed-row';
+    else if (dual)        rowClass = 'dual-tag';
+
+    const stopDisplay = isCompleted ? '✓' : isStarted ? '▶' : stopNum;
+    const stopNumStyle = isCompleted
+      ? 'background:rgba(52,211,153,0.15);color:var(--success);font-size:14px'
+      : isStarted
+      ? 'background:rgba(96,165,250,0.15);color:#60a5fa;font-size:14px'
+      : '';
+
+    // Timing info for completed stops
+    let timingLine = '';
+    if (isCompleted && cmp) {
+      const rate      = getCrewRate();
+      const onSite    = cmp.onSiteMin != null ? fmtMin(cmp.onSiteMin) : null;
+      const drive     = cmp.driveMin  != null ? fmtMin(cmp.driveMin)  : null;
+      const totalMin  = (cmp.onSiteMin || 0) + (cmp.driveMin || 0);
+      const cost      = rate && totalMin ? `· ~$${((totalMin / 60) * rate).toFixed(0)}` : '';
+      const parts     = [];
+      if (cmp.startedDisplay) parts.push(`▶ ${cmp.startedDisplay}`);
+      parts.push(`✓ ${cmp.completedAt}`);
+      if (onSite)  parts.push(`${onSite} on-site`);
+      if (drive)   parts.push(`${drive} drive`);
+      if (cost)    parts.push(cost);
+      timingLine = parts.length ? `<div class="timing-badge">${parts.join(' · ')}</div>` : '';
+    }
+
+    // Button cluster
+    let actionBtns = '';
+    if (isCompleted) {
+      actionBtns = `<button class="btn-uncomplete" onclick="unmarkComplete('${t.unique_idn}')">↩ Undo</button>`;
+    } else if (isSkipped) {
+      actionBtns = `<button class="btn-unskip" onclick="unskipTicket('${t.unique_idn}')">↩ Undo</button>`;
+    } else if (isStarted) {
+      actionBtns = `
+        <button class="btn-complete" onclick="markComplete('${t.unique_idn}','${scope}')">✅ Done</button>
+        <button class="btn-skip"     onclick="openSkipModal('${t.unique_idn}','${scope}')">🚫 Skip</button>`;
+    } else {
+      actionBtns = `
+        <button class="btn-start"    onclick="startStop('${t.unique_idn}','${scope}')">▶ Start</button>
+        <button class="btn-skip"     onclick="openSkipModal('${t.unique_idn}','${scope}')">🚫 Skip</button>`;
+    }
+
+    const canMove = !isCompleted && !isSkipped && !isStarted;
+    const isFirst = stopNum === 1;
+    const isLast  = stopNum === tickets.length;
+
+    stopNum++;
+
+    html += `
+      <div class="ticket-row ${rowClass}" id="ticket-row-${t.unique_idn}"
+           draggable="${canMove}"
+           data-idn="${t.unique_idn}" data-scope="${scope}"
+           ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="reorder-col">
+          ${canMove ? `<span class="drag-handle" title="Drag to reorder">⠿</span>` : '<span style="min-width:24px"></span>'}
+          <button class="btn-move" title="Move up"   onclick="moveStop('${scope}','${t.unique_idn}',-1)" ${!canMove || isFirst  ? 'disabled' : ''}>▲</button>
+          <button class="btn-move" title="Move down" onclick="moveStop('${scope}','${t.unique_idn}', 1)" ${!canMove || isLast   ? 'disabled' : ''}>▼</button>
+        </div>
+        <div class="stop-num-wrap">
+          <div class="stop-num ${isCompleted || isStarted ? '' : color} ${canMove ? 'clickable' : ''}"
+               style="${stopNumStyle}"
+               title="${canMove ? 'Click to jump to position' : ''}"
+               onclick="${canMove ? `togglePosInput('${t.unique_idn}','${scope}',${stopNum-1},${tickets.length},this)` : ''}">
+            ${stopDisplay}
+          </div>
+          ${canMove ? `<input class="pos-input" id="pos-${t.unique_idn}"
+            type="number" min="1" max="${tickets.length}" placeholder="${stopNum-1}"
+            onkeydown="onPosKey(event,'${t.unique_idn}','${scope}',${tickets.length})"
+            onblur="hidePosInput('${t.unique_idn}')" />` : ''}
+        </div>
+        <div class="ticket-info">
+          <div class="address">
+            ${addr}
+            ${dual    ? '<span class="dual-pill">DUAL</span>'         : ''}
+            ${flagged ? '<span class="flag-pill">⚠️ FLAGGED</span>'   : ''}
+            ${fixed   ? '<span class="fixed-pill">✅ FIXED</span>'    : ''}
+          </div>
+          <div class="csi-ref">CSI 3000 Ticket# <strong>${csi}</strong></div>
+          <div class="meta"><span>📍 ${city}</span></div>
+          ${work ? `<div class="work">${work}${work.length >= 110 ? '…' : ''}</div>` : ''}
+          ${flagged     ? `<div class="flag-note">⚠️ ${t._flags[0].message} — fix in review panel above</div>` : ''}
+          ${fixed       ? `<div class="fixed-note">✅ Address verified & updated</div>` : ''}
+          ${isStarted   ? `<div class="active-status">▶ On site — tap Done when finished</div>` : ''}
+          ${isCompleted ? timingLine : ''}
+          ${isSkipped   ? `<div class="skip-status">🚫 SKIPPED — ${sk.reason}${sk.note ? ': "' + sk.note + '"' : ''}</div>` : ''}
+          ${orderNo     ? `<div class="order-ref">Customer Order: ${orderNo}</div>` : ''}
+        </div>
+        <div class="card-right-col">
+          <div class="dist-tag"><span class="mi">${dist} mi</span>from origin</div>
+          <div class="card-action-btns">${actionBtns}</div>
+        </div>
+      </div>`;
+  });
+
+  listEl.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────
+//  WEEK OF LABEL
+// ─────────────────────────────────────────────────────────
+function formatWeekDate(input) {
+  // Auto-insert slashes as user types: mm/dd/yyyy
+  let v = input.value.replace(/\D/g, '').substring(0, 8);
+  if (v.length >= 5)      v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+  else if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  input.value = v;
+}
+
+
+// ─────────────────────────────────────────────────────────
+let currentViewMode   = 'dispatcher';
+let currentRouteFilter = 'all';
+
+function setViewMode(mode) {
+  currentViewMode = mode;
+  const isCrew = mode === 'crew';
+  document.body.classList.toggle('crew-mode', isCrew);
+
+  document.getElementById('mode-dispatcher').classList.toggle('active-dispatcher', !isCrew);
+  document.getElementById('mode-crew').classList.toggle('active-crew', isCrew);
+
+  // In crew mode hide rate-bar (already handled by CSS), just ensure it stays hidden
+  // Re-render both lists so reorder col presence matches mode
+  renderList('asphalt',  asphaltRoute);
+  renderList('concrete', concreteRoute);
+}
+
+function setRouteFilter(filter) {
+  currentRouteFilter = filter;
+  const grid = document.querySelector('.routes-grid');
+  if (!grid) return;
+  grid.classList.remove('show-asphalt', 'show-concrete');
+  if (filter === 'asphalt')  grid.classList.add('show-asphalt');
+  if (filter === 'concrete') grid.classList.add('show-concrete');
+
+  ['all','asphalt','concrete'].forEach(f => {
+    const btn = document.getElementById(`rf-${f}`);
+    if (!btn) return;
+    btn.classList.remove('rf-active');
+    if (f === 'asphalt') btn.classList.remove('rf-active');
+  });
+  // Reset all, then activate selected
+  document.querySelectorAll('.rfbtn').forEach(b => b.classList.remove('rf-active'));
+  const active = document.getElementById(`rf-${filter}`);
+  if (active) active.classList.add('rf-active');
+}
+
+// ─────────────────────────────────────────────────────────
+//  JUMP-TO-POSITION (click stop number to type a position)
+// ─────────────────────────────────────────────────────────
+function togglePosInput(idn, scope, currentPos, total, badgeEl) {
+  const input = document.getElementById(`pos-${idn}`);
+  if (!input) return;
+  const showing = input.classList.contains('show');
+  // Hide any other open inputs first
+  document.querySelectorAll('.pos-input.show').forEach(el => el.classList.remove('show'));
+  if (!showing) {
+    input.value = '';
+    input.placeholder = currentPos;
+    input.classList.add('show');
+    input.focus();
+    input.select();
+  }
+}
+
+function hidePosInput(idn) {
+  const input = document.getElementById(`pos-${idn}`);
+  if (input) input.classList.remove('show');
+}
+
+function onPosKey(e, idn, scope, total) {
+  if (e.key === 'Escape') { hidePosInput(idn); return; }
+  if (e.key !== 'Enter')  return;
+
+  const input   = document.getElementById(`pos-${idn}`);
+  const target  = parseInt(input.value, 10);
+  if (isNaN(target) || target < 1 || target > total) {
+    input.style.borderColor = 'var(--danger)';
+    setTimeout(() => input.style.borderColor = '', 800);
+    return;
+  }
+
+  hidePosInput(idn);
+  moveStopToPosition(scope, idn, target);
+}
+
+function moveStopToPosition(scope, idn, targetPos) {
+  const route   = getRoute(scope).slice();
+  const fromIdx = route.findIndex(t => String(t.unique_idn) === String(idn));
+  if (fromIdx < 0) return;
+
+  // targetPos is 1-based; convert to 0-based index
+  const toIdx = Math.min(Math.max(targetPos - 1, 0), route.length - 1);
+  if (fromIdx === toIdx) return;
+
+  const [moved] = route.splice(fromIdx, 1);
+  route.splice(toIdx, 0, moved);
+
+  resequenceDistances(route);
+  setRoute(scope, route);
+  renderList(scope, route);
+  updateProgressBars();
+  markKmlStale();
+
+  // Flash the moved card to confirm
+  setTimeout(() => {
+    const el = document.getElementById(`ticket-row-${idn}`);
+    if (el) {
+      el.style.transition = 'box-shadow 0.2s';
+      el.style.boxShadow  = '0 0 0 2px var(--warning)';
+      setTimeout(() => { el.style.boxShadow = ''; }, 900);
+    }
+  }, 50);
+}
+
+// ─────────────────────────────────────────────────────────
+//  TICKET SEARCH
+// ─────────────────────────────────────────────────────────
+function onSearchInput(val) {
+  const query = val.trim().replace(/^#/, '');
+  const clearBtn = document.getElementById('search-clear');
+  const noResult = document.getElementById('search-no-result');
+  clearBtn.classList.toggle('show', query.length > 0);
+
+  // Remove all highlight/dim classes
+  document.querySelectorAll('.ticket-row').forEach(el => {
+    el.classList.remove('search-highlight', 'search-dim');
+  });
+
+  if (!query) { noResult.style.display = 'none'; return; }
+
+  // Find all matching rows across both routes
+  const allRoutes = [...asphaltRoute, ...concreteRoute];
+  const matches = allRoutes.filter(t =>
+    String(t.unique_idn).includes(query)
+  );
+
+  if (matches.length === 0) {
+    noResult.style.display = 'inline';
+    return;
+  }
+  noResult.style.display = 'none';
+
+  // Dim all ticket rows, highlight matches
+  document.querySelectorAll('.ticket-row[data-idn]').forEach(el => {
+    const idn = el.dataset.idn;
+    const isMatch = matches.some(t => String(t.unique_idn) === idn);
+    el.classList.toggle('search-highlight', isMatch);
+    el.classList.toggle('search-dim', !isMatch);
+  });
+
+  // Scroll first match into view
+  const firstMatch = matches[0];
+  const firstEl = document.getElementById(`ticket-row-${firstMatch.unique_idn}`);
+  if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function clearSearch() {
+  const input = document.getElementById('search-input');
+  if (input) input.value = '';
+  document.getElementById('search-clear').classList.remove('show');
+  document.getElementById('search-no-result').style.display = 'none';
+  document.querySelectorAll('.ticket-row').forEach(el => {
+    el.classList.remove('search-highlight', 'search-dim');
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  CONCRETE ORDER STOPS
+// ─────────────────────────────────────────────────────────
+let dropCounter = 0;
+
+function openDropModal() {
+  document.getElementById('drop-time').value  = '';
+  document.getElementById('drop-mix').value   = '';
+  document.getElementById('drop-addr').value  = '';
+  document.getElementById('drop-notes').value = '';
+  document.getElementById('drop-modal').classList.add('show');
+  // Default time to now
+  const now = new Date();
+  document.getElementById('drop-time').value =
+    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+
+function confirmAddDrop() {
+  const time  = document.getElementById('drop-time').value;
+  const mix   = document.getElementById('drop-mix').value.trim();
+  const addr  = document.getElementById('drop-addr').value.trim();
+  const notes = document.getElementById('drop-notes').value.trim();
+
+  if (!time && !mix) {
+    alert('Please enter at least a delivery time or mix number.');
+    return;
+  }
+
+  dropCounter++;
+  const dropStop = {
+    unique_idn:            `DROP-${dropCounter}`,
+    dispatch_address1:     addr || 'Concrete Order',
+    dispatch_city:         '',
+    description_of_repair: 'CONCRETE ORDER',
+    dispatch_work_requested: [
+      mix   ? `Mix: ${mix}`   : '',
+      time  ? `Time: ${document.getElementById('drop-time').value}` : '',
+      notes ? `Notes: ${notes}` : '',
+    ].filter(Boolean).join(' · '),
+    customer_order_no:     '',
+    _isDrop:    true,
+    _isDual:    false,
+    _isFlagged: false,
+    _dropTime:  time,
+    _dropMix:   mix,
+    _dropNotes: notes,
+    _distFromStart: 0,
+    _distFromPrev:  0,
+    _isFirstInCity: false,
+    _cityLabel:     '',
+  };
+
+  concreteRoute.push(dropStop);
+  resequenceDistances(concreteRoute);
+  renderList('concrete', concreteRoute);
+  updateProgressBars();
+  markKmlStale();
+  document.getElementById('drop-modal').classList.remove('show');
+}
+
+function removeDrop(idn) {
+  concreteRoute = concreteRoute.filter(t => String(t.unique_idn) !== String(idn));
+  resequenceDistances(concreteRoute);
+  renderList('concrete', concreteRoute);
+  updateProgressBars();
+  markKmlStale();
+}
+
+// ─────────────────────────────────────────────────────────
+//  MANUAL REORDER — arrow buttons + drag and drop
+// ─────────────────────────────────────────────────────────
+function getRoute(scope) { return scope === 'asphalt' ? asphaltRoute : concreteRoute; }
+function setRoute(scope, arr) { if (scope === 'asphalt') asphaltRoute = arr; else concreteRoute = arr; }
+
+function markKmlStale() {
+  const msg = document.getElementById('kml-stale-msg');
+  const btn = document.getElementById('kml-export-btn');
+  if (msg) msg.style.display = 'block';
+  if (btn) { btn.style.background = '#b45309'; btn.textContent = '🔄 Re-export for My Maps (.kml)'; }
+  // Pulse Maps + Export buttons to signal they reflect the updated sequence
+  ['asphalt','concrete'].forEach(scope => {
+    ['maps-btn','export-btn'].forEach(prefix => {
+      const el = document.getElementById(`${prefix}-${scope}`);
+      if (el) {
+        el.classList.remove('route-stale');
+        void el.offsetWidth; // reflow to restart animation
+        el.classList.add('route-stale');
+        el.addEventListener('animationend', () => el.classList.remove('route-stale'), { once: true });
+      }
+    });
+  });
+}
+
+function clearKmlStale() {
+  const msg = document.getElementById('kml-stale-msg');
+  const btn = document.getElementById('kml-export-btn');
+  if (msg) msg.style.display = 'none';
+  if (btn) { btn.style.background = '#1a73e8'; btn.textContent = '⬇️ Export for My Maps (.kml)'; }
+}
+
+function moveStop(scope, idn, dir) {
+  const route = getRoute(scope).slice();
+  const idx   = route.findIndex(t => String(t.unique_idn) === String(idn));
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= route.length) return;
+  // Swap
+  [route[idx], route[newIdx]] = [route[newIdx], route[idx]];
+  resequenceDistances(route);
+  setRoute(scope, route);
+  renderList(scope, route);
+  updateProgressBars();
+  markKmlStale();
+}
+
+// Recalculate _distFromPrev, _distFromStart, _isFirstInCity, _cityLabel after manual reorder
+function resequenceDistances(route) {
+  let prev = ORIGIN;
+  route.forEach((t, i) => {
+    const coords = t._addrCoords || t._verifiedCoords || t._coords || null;
+    const prevCity = i > 0 ? route[i-1]._cityLabel : null;
+    const thisCity = (CITY_NAMES[(t._resolvedCity || t.dispatch_city || '').trim().toLowerCase()]
+                   || (t._resolvedCity || t.dispatch_city || '').replace(/_/g,' ')).trim();
+    t._cityLabel     = thisCity;
+    t._isFirstInCity = thisCity !== prevCity;
+    t._distFromStart = coords ? haversine(ORIGIN, coords) : (t._distFromStart || 0);
+    t._distFromPrev  = coords ? haversine(prev, coords)   : (t._distFromPrev  || 0);
+    if (coords) prev = coords;
+  });
+}
+
+// ── Drag and drop ──
+let dragSrcIdn   = null;
+let dragSrcScope = null;
+
+function onDragStart(e) {
+  dragSrcIdn   = e.currentTarget.dataset.idn;
+  dragSrcScope = e.currentTarget.dataset.scope;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  // Clean up any drop indicators
+  document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+    el.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+  dragSrcIdn = null; dragSrcScope = null;
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.currentTarget;
+  if (!target.dataset.idn || target.dataset.idn === dragSrcIdn) return;
+  // Only allow within same scope
+  if (target.dataset.scope !== dragSrcScope) return;
+  const rect = target.getBoundingClientRect();
+  const mid  = rect.top + rect.height / 2;
+  target.classList.remove('drag-over-top', 'drag-over-bottom');
+  target.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.classList.remove('drag-over-top', 'drag-over-bottom');
+  if (!dragSrcIdn || !target.dataset.idn) return;
+  if (target.dataset.idn === dragSrcIdn) return;
+  if (target.dataset.scope !== dragSrcScope) return;
+
+  const scope = dragSrcScope;
+  const route = getRoute(scope).slice();
+  const fromIdx = route.findIndex(t => String(t.unique_idn) === String(dragSrcIdn));
+  const toIdx   = route.findIndex(t => String(t.unique_idn) === String(target.dataset.idn));
+  if (fromIdx < 0 || toIdx < 0) return;
+
+  // Determine if dropping above or below target
+  const rect  = target.getBoundingClientRect();
+  const above = e.clientY < rect.top + rect.height / 2;
+  const insertAt = above ? toIdx : toIdx + 1;
+
+  const [moved] = route.splice(fromIdx, 1);
+  const adjusted = fromIdx < insertAt ? insertAt - 1 : insertAt;
+  route.splice(adjusted, 0, moved);
+
+  resequenceDistances(route);
+  setRoute(scope, route);
+  renderList(scope, route);
+  updateProgressBars();
+  markKmlStale();
+}
+
+// ─────────────────────────────────────────────────────────
+//  MAPS
+// ─────────────────────────────────────────────────────────
+function getRoutedAddress(t) {
+  // If the user manually verified a fix, use that
+  if (fixState[t.unique_idn]?.verified) {
+    const fs = fixState[t.unique_idn];
+    const zip = fs.zip ? ` ${fs.zip}` : '';
+    return `${fs.addr}, ${fs.city}, IL${zip}`;
+  }
+
+  // Resolve city code → full name (client codes are always in CITY_NAMES)
+  const cityRaw    = (t.dispatch_city || '').trim();
+  const cityPretty = CITY_NAMES[cityRaw.toLowerCase()] || cityRaw.replace(/_/g, ' ');
+  const zip        = CITY_ZIPS[cityPretty.toLowerCase()] ? ` ${CITY_ZIPS[cityPretty.toLowerCase()]}` : '';
+
+  // Strip non-standard descriptors from address (LONGSIDE, REAR, etc.)
+  const addr = (t.dispatch_address1 || '')
+    .replace(/\s*-\s*(LONGSIDE|REAR|SIDE|BACK|FRONT)\s*/gi, '')
+    .trim();
+
+  // Always append IL — all addresses are in Illinois
+  return `${addr}, ${cityPretty}, IL${zip}`;
+}
+
+function buildMapsUrls(addresses) {
+  const urls = [];
+  for (let i = 0; i < addresses.length; i += 10) {
+    const chunk = addresses.slice(i, i+10);
+    const enc = chunk.map(a => encodeURIComponent(a));
+    if (enc.length === 1) {
+      urls.push(`https://www.google.com/maps/search/?api=1&query=${enc[0]}`);
+    } else {
+      const wps = enc.slice(1,-1).join('|');
+      let url = `https://www.google.com/maps/dir/?api=1&origin=${enc[0]}&destination=${enc[enc.length-1]}`;
+      if (wps) url += `&waypoints=${wps}`;
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+function openMaps(scope) {
+  const tickets = scope === 'asphalt' ? asphaltRoute : concreteRoute;
+  if (!tickets.length) { alert('No stops in this route.'); return; }
+  const addresses = ['Wauconda, IL 60085', ...tickets.map(getRoutedAddress)];
+  const urls = buildMapsUrls(addresses);
+  const chunks = [];
+  for (let i = 0; i < addresses.length; i += 10) chunks.push(addresses.slice(i, i+10));
+  document.getElementById('modal-title').textContent =
+    scope === 'asphalt' ? '🟡 Asphalt Route — Google Maps' : '🔵 Concrete Route — Google Maps';
+  document.getElementById('maps-url-display').textContent = urls[0];
+  document.getElementById('maps-links').innerHTML = urls.map((url, i) =>
+    `<a href="${url}" target="_blank" class="btn btn-maps" style="font-size:12px">
+       🗺️ ${urls.length > 1 ? `Leg ${i+1} (${chunks[i].length} stops)` : `Open Full Route (${tickets.length} stops)`}
+     </a>`
+  ).join('');
+  document.getElementById('maps-modal').classList.add('show');
+}
+
+// ─────────────────────────────────────────────────────────
+//  EXPORT
+// ─────────────────────────────────────────────────────────
+function exportRoute(scope) {
+  const tickets = scope === 'asphalt' ? asphaltRoute : concreteRoute;
+  const label   = scope === 'asphalt' ? 'Asphalt' : 'Concrete';
+  const data = tickets.map((t, i) => ({
+    'Stop #':            i+1,
+    'Route':             label,
+    'Dual-Scope':        t._isDual ? 'YES' : '',
+    'Address Flag':      t._isFlagged ? (fixState[t.unique_idn]?.verified ? 'FIXED' : 'NEEDS REVIEW') : '',
+    'Ticket ID':         t.unique_idn || '',
+    'Address (Routed)':  getRoutedAddress(t),
+    'Address (Original)': (t.dispatch_address1||'').trim(),
+    'City (Original)':   (t.dispatch_city||'').trim(),
+    'Miles from Origin': t._distFromStart ? t._distFromStart.toFixed(1) : '',
+    'Status':            (t.dispatch_status_code||'').trim(),
+    'Description':       (t.description_of_repair||'').trim(),
+    'Work Requested':    (t.dispatch_work_requested||'').trim(),
+    'Notes':             (t.dispatch_notes||'').trim(),
+    'Customer Order':    t.customer_order_no || '',
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:7},{wch:10},{wch:11},{wch:14},{wch:11},{wch:36},{wch:30},{wch:16},{wch:16},{wch:12},{wch:30},{wch:45},{wch:40},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, `${label} Route`);
+  XLSX.writeFile(wb, `Nicor_${label}_Route_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────
+//  SKIP SYSTEM
+// ─────────────────────────────────────────────────────────
+let _skipTargetIdn   = null;
+let _skipTargetRoute = null;
+let _skipSelectedReason = null;
+
+function openSkipModal(idn, route) {
+  const ticket = allActive.find(t => String(t.unique_idn) === String(idn));
+  if (!ticket) return;
+
+  _skipTargetIdn    = idn;
+  _skipTargetRoute  = route;
+  _skipSelectedReason = null;
+
+  // Reset modal state
+  document.querySelectorAll('.reason-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('skip-note-input').value = '';
+  document.getElementById('btn-confirm-skip').disabled = true;
+
+  const addr = (ticket.dispatch_address1||'').trim();
+  const city = (CITY_NAMES[(ticket.dispatch_city||'').toLowerCase()] || (ticket.dispatch_city||'').replace(/_/g,' ')).trim();
+  document.getElementById('skip-modal-ticket-info').textContent =
+    `CSI 3000 Ticket #${idn} — ${addr}, ${city}`;
+
+  document.getElementById('skip-modal').classList.add('show');
+}
+
+function selectReason(btn, reason) {
+  document.querySelectorAll('.reason-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  _skipSelectedReason = reason;
+  document.getElementById('btn-confirm-skip').disabled = false;
+}
+
+function confirmSkip() {
+  if (!_skipTargetIdn || !_skipSelectedReason) return;
+
+  const note = document.getElementById('skip-note-input').value.trim();
+  skipState[_skipTargetIdn] = {
+    reason:    _skipSelectedReason,
+    note:      note,
+    skippedAt: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    route:     _skipTargetRoute,
+  };
+
+  closeSkipModal();
+  refreshAfterSkipChange();
+}
+
+function unskipTicket(idn) {
+  delete skipState[idn];
+  refreshAfterSkipChange();
+}
+
+function closeSkipModal() {
+  document.getElementById('skip-modal').classList.remove('show');
+  _skipTargetIdn = null;
+  _skipTargetRoute = null;
+  _skipSelectedReason = null;
+}
+
+function refreshAfterSkipChange() {
+  // Re-render both route lists in place (no full rebuild needed)
+  renderList('asphalt',  asphaltRoute);
+  renderList('concrete', concreteRoute);
+  updateSkipCounter();
+  renderSkippedSummary();
+}
+
+function updateSkipCounter() {
+  const count = Object.keys(skipState).length;
+  const counter = document.getElementById('skip-counter');
+  document.getElementById('skip-count-num').textContent = count;
+  counter.classList.toggle('show', count > 0);
+}
+
+function scrollToSkipped() {
+  document.getElementById('skipped-summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderSkippedSummary() {
+  const panel = document.getElementById('skipped-summary');
+  const rowsEl = document.getElementById('skipped-rows');
+  const count = Object.keys(skipState).length;
+
+  if (!count) { panel.classList.remove('show'); return; }
+  panel.classList.add('show');
+  document.getElementById('skipped-summary-count').textContent = `${count} ticket${count !== 1 ? 's' : ''} skipped today`;
+
+  rowsEl.innerHTML = Object.entries(skipState).map(([idn, sk]) => {
+    const ticket = allActive.find(t => String(t.unique_idn) === String(idn));
+    if (!ticket) return '';
+    const addr    = (ticket.dispatch_address1||'').trim();
+    const city    = (CITY_NAMES[(ticket.dispatch_city||'').toLowerCase()] || (ticket.dispatch_city||'').replace(/_/g,' ')).trim();
+    const orderNo = (ticket.customer_order_no||'').toString().trim();
+    return `
+      <div class="skipped-summary-row">
+        <div>
+          <div class="sk-address">${addr}, ${city}, IL</div>
+          <div class="sk-csi">CSI 3000 Ticket# <strong>${idn}</strong>${orderNo ? ` &nbsp;·&nbsp; Customer Order: ${orderNo}` : ''}</div>
+          <div class="sk-meta">${(ticket.description_of_repair||'').trim()} · ${sk.route.charAt(0).toUpperCase() + sk.route.slice(1)} Route · Skipped at ${sk.skippedAt}</div>
+          <div class="sk-reason">🚫 ${sk.reason}</div>
+          ${sk.note ? `<div class="sk-note">"${sk.note}"</div>` : ''}
+        </div>
+        <button class="btn-unskip" onclick="unskipTicket('${idn}')">↩ Undo</button>
+      </div>`;
+  }).join('');
+}
+
+function exportSkipped() {
+  const skipped = Object.entries(skipState).map(([idn, sk]) => {
+    const t = allActive.find(x => String(x.unique_idn) === String(idn)) || {};
+    const city = (CITY_NAMES[(t.dispatch_city||'').toLowerCase()] || (t.dispatch_city||'').replace(/_/g,' ')).trim();
+    return {
+      'CSI 3000 Ticket #':  idn,
+      'Customer Order #':   (t.customer_order_no||'').toString().trim(),
+      'Route':              sk.route.charAt(0).toUpperCase() + sk.route.slice(1),
+      'Skip Reason':        sk.reason,
+      'Notes':              sk.note || '',
+      'Time Skipped':       sk.skippedAt,
+      'Date':               new Date().toLocaleDateString('en-US'),
+      'Address':            (t.dispatch_address1||'').trim(),
+      'City':               city,
+      'State':              'IL',
+      'Description':        (t.description_of_repair||'').trim(),
+      'Work Requested':     (t.dispatch_work_requested||'').trim(),
+      'Dispatch Notes':     (t.dispatch_notes||'').trim(),
+      'Status (Original)':  (t.dispatch_status_code||'').trim(),
+    };
+  });
+
+  if (!skipped.length) { alert('No skipped tickets to export.'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(skipped);
+  ws['!cols'] = [
+    {wch:18},{wch:18},{wch:10},{wch:24},{wch:40},{wch:12},{wch:12},
+    {wch:32},{wch:20},{wch:7},{wch:30},{wch:45},{wch:40},{wch:14}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Skipped Tickets');
+  XLSX.writeFile(wb, `Nicor_Skipped_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────
+//  TIMING HELPERS
+// ─────────────────────────────────────────────────────────
+function getCrewRate() {
+  const v = parseFloat(document.getElementById('crew-rate-input')?.value);
+  return isNaN(v) || v <= 0 ? null : v;
+}
+
+function fmtMin(min) {
+  if (!min && min !== 0) return '—';
+  if (min < 60) return `${Math.round(min)}m`;
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function minBetween(isoA, isoB) {
+  if (!isoA || !isoB) return null;
+  return (new Date(isoB) - new Date(isoA)) / 60000;
+}
+
+// Estimate drive minutes from miles (avg 25 mph in suburban IL with stops)
+function driveMinsFromMiles(miles) {
+  return miles ? (miles / 25) * 60 : null;
+}
+
+// ─────────────────────────────────────────────────────────
+//  COMPLETE SYSTEM
+// ─────────────────────────────────────────────────────────
+function startStop(idn, route) {
+  startState[idn] = { startedAt: new Date().toISOString(), route };
+  refreshAfterStatusChange();
+}
+
+function markComplete(idn, route) {
+  const started   = startState[idn]?.startedAt || null;
+  const now       = new Date();
+  const onSiteMin = started ? minBetween(started, now.toISOString()) : null;
+
+  // Estimate drive time from previous completed stop's distance metadata
+  const routeList = route === 'asphalt' ? asphaltRoute : concreteRoute;
+  const ticket    = routeList.find(t => String(t.unique_idn) === String(idn));
+  const driveMin  = ticket ? driveMinsFromMiles(ticket._distFromPrev) : null;
+
+  completeState[idn] = {
+    completedAt: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    completedISO: now.toISOString(),
+    route,
+    startedAt:   started,
+    startedDisplay: started ? new Date(started).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+    onSiteMin,
+    driveMin,
+  };
+  delete startState[idn];
+  refreshAfterStatusChange();
+}
+
+function unmarkComplete(idn) {
+  delete completeState[idn];
+  delete startState[idn];
+  refreshAfterStatusChange();
+}
+
+function refreshAfterStatusChange() {
+  renderList('asphalt',  asphaltRoute);
+  renderList('concrete', concreteRoute);
+  updateSkipCounter();
+  updateProgressBars();
+  renderSkippedSummary();
+  updateEndDayButton();
+}
+
+function updateProgressBars() {
+  ['asphalt','concrete'].forEach(scope => {
+    const route   = scope === 'asphalt' ? asphaltRoute : concreteRoute;
+    const total   = route.length;
+    const done    = route.filter(t => completeState[t.unique_idn]).length;
+    const skipped = route.filter(t => skipState[t.unique_idn]).length;
+    const pct     = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    // Total on-site time for progress label
+    const timedStops  = route.filter(t => completeState[t.unique_idn]?.onSiteMin != null);
+    const totalOnSite = timedStops.reduce((s, t) => s + completeState[t.unique_idn].onSiteMin, 0);
+    const avgOnSite   = timedStops.length > 0 ? totalOnSite / timedStops.length : null;
+
+    document.getElementById(`progress-${scope}`).classList.toggle('show', total > 0 && done > 0);
+    document.getElementById(`prog-${scope}-fill`).style.width = pct + '%';
+    document.getElementById(`prog-${scope}-label`).textContent =
+      `${done} of ${total} complete${skipped ? ` · ${skipped} skipped` : ''} (${pct}%)` +
+      (avgOnSite != null ? ` · avg on-site ${fmtMin(avgOnSite)}` : '');
+  });
+}
+
+function updateEndDayButton() {
+  const anyDone = Object.keys(completeState).length > 0;
+  document.getElementById('btn-end-day').style.display = anyDone ? '' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────
+//  END OF DAY MODAL
+// ─────────────────────────────────────────────────────────
+function openEndDayModal() {
+  const allRoutes   = [...asphaltRoute, ...concreteRoute];
+  const doneCount   = allRoutes.filter(t => completeState[t.unique_idn]).length;
+  const skipCount   = allRoutes.filter(t => skipState[t.unique_idn]).length;
+  const remaining   = allRoutes.filter(t => !completeState[t.unique_idn] && !skipState[t.unique_idn]);
+
+  document.getElementById('eod-stats-grid').innerHTML = `
+    <div class="eod-stat es-done">
+      <div class="es-val">${doneCount}</div>
+      <div class="es-label">✅ Completed</div>
+    </div>
+    <div class="eod-stat es-left">
+      <div class="es-val">${remaining.length}</div>
+      <div class="es-label">📋 Carrying Over</div>
+    </div>
+    <div class="eod-stat es-skip">
+      <div class="es-val">${skipCount}</div>
+      <div class="es-label">🚫 Skipped</div>
+    </div>`;
+
+  // Find last completed stop (walk routes in order from the end)
+  let lastStop = null;
+  for (const route of [asphaltRoute, concreteRoute]) {
+    for (let i = route.length - 1; i >= 0; i--) {
+      if (completeState[route[i].unique_idn]) {
+        lastStop = { ticket: route[i] };
+        break;
+      }
+    }
+    if (lastStop) break;
+  }
+
+  const lastStopSection = document.getElementById('eod-last-stop-section');
+  const lastStopBox     = document.getElementById('eod-last-stop-box');
+
+  if (lastStop) {
+    const t    = lastStop.ticket;
+    const addr = (t.dispatch_address1||'').trim();
+    const city = (CITY_NAMES[(t.dispatch_city||'').toLowerCase()] || (t.dispatch_city||'').replace(/_/g,' ')).trim();
+    const time = completeState[t.unique_idn].completedAt;
+    lastStopBox.innerHTML = `
+      <div class="ls-label">🏁 Crew's Last Completed Stop</div>
+      <div class="ls-addr">${addr}, ${city}, IL</div>
+      <div class="ls-meta">CSI 3000 Ticket# ${t.unique_idn} &nbsp;·&nbsp; Completed at ${time}</div>`;
+    lastStopSection.style.display = 'block';
+  } else {
+    lastStopSection.style.display = 'none';
+  }
+
+  // Show remaining note only if there are remaining stops
+  document.getElementById('eod-remaining-note').style.display =
+    (remaining.length > 0 || skipCount > 0) ? 'block' : 'none';
+
+  document.getElementById('eod-modal').classList.add('show');
+}
+
+function confirmEndDay() {
+  document.getElementById('eod-modal').classList.remove('show');
+  generatePrintableReport();
+}
+
+function closePrintView() {
+  document.getElementById('eod-print-view').classList.remove('show');
+  document.getElementById('geocode-progress').style.display = 'none';
+  document.getElementById('search-wrap').classList.remove('show');
+  clearSearch();
+  Object.keys(geocodeCache).forEach(k => delete geocodeCache[k]);
+}
+
+function generatePrintableReport() {
+  const today     = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  const allRoutes = [...asphaltRoute, ...concreteRoute];
+  const rate      = getCrewRate();
+
+  // De-dupe dual-scope tickets
+  const seen = new Set();
+  const completed  = [];
+  const skipped    = [];
+  const notReached = [];
+
+  allRoutes.forEach(t => {
+    if (t._isDrop) return; // concrete orders are not CSI tickets
+    const key = String(t.unique_idn);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const city  = (CITY_NAMES[(t.dispatch_city||'').toLowerCase()] || (t.dispatch_city||'').replace(/_/g,' ')).trim();
+    const scope = t._isDual ? 'Both' : (asphaltRoute.find(x => String(x.unique_idn) === key) ? 'Asphalt' : 'Concrete');
+    const base  = { ticket: t, city, scope, idn: key };
+
+    if (completeState[key])  completed.push({ ...base, cmp: completeState[key] });
+    else if (skipState[key]) skipped.push({ ...base, sk: skipState[key] });
+    else                     notReached.push(base);
+  });
+
+  const total    = completed.length + skipped.length + notReached.length;
+  const compPct  = total > 0 ? Math.round((completed.length / total) * 100) : 0;
+
+  // Time stats from completed stops that have timing data
+  const timed    = completed.filter(r => r.cmp.onSiteMin != null);
+  const totalOnSite = timed.reduce((s, r) => s + r.cmp.onSiteMin, 0);
+  const avgOnSite   = timed.length > 0 ? totalOnSite / timed.length : null;
+
+  const totalDrive  = completed.filter(r => r.cmp.driveMin != null).reduce((s, r) => s + (r.cmp.driveMin||0), 0);
+  const grandTotal  = totalOnSite + totalDrive;
+
+  // Cost
+  const totalCost   = rate && grandTotal ? ((grandTotal / 60) * rate) : null;
+  const costPerStop = rate && timed.length > 0 ? ((totalOnSite / 60 / timed.length) * rate) : null;
+
+  // By ticket type
+  const byType = {};
+  timed.forEach(r => {
+    const type = r.scope;
+    if (!byType[type]) byType[type] = { count: 0, totalMin: 0 };
+    byType[type].count++;
+    byType[type].totalMin += r.cmp.onSiteMin;
+  });
+
+  // Skip reason tally
+  const reasonTally = {};
+  skipped.forEach(r => {
+    const reason = r.sk.reason || 'Unknown';
+    reasonTally[reason] = (reasonTally[reason] || 0) + 1;
+  });
+
+  // ── KPI row ──
+  const kpiHtml = `
+    <div class="eod-kpi-row">
+      <div class="eod-kpi kpi-green"><div class="kv">${completed.length}</div><div class="kl">✅ Completed</div></div>
+      <div class="eod-kpi kpi-red"  ><div class="kv">${skipped.length}</div><div class="kl">🚫 Skipped</div></div>
+      <div class="eod-kpi kpi-amber"><div class="kv">${notReached.length}</div><div class="kl">⏳ Not Reached</div></div>
+      <div class="eod-kpi kpi-blue" ><div class="kv">${compPct}%</div><div class="kl">Completion Rate</div></div>
+    </div>`;
+
+  // ── Timing KPIs ──
+  let timingHtml = '';
+  if (timed.length > 0) {
+    timingHtml = `
+      <div class="eod-section-title">Time on Site</div>
+      <div class="eod-kpi-row">
+        <div class="eod-kpi"><div class="kv">${fmtMin(avgOnSite)}</div><div class="kl">Avg per Stop</div></div>
+        <div class="eod-kpi"><div class="kv">${fmtMin(totalOnSite)}</div><div class="kl">Total On-Site</div></div>
+        <div class="eod-kpi"><div class="kv">${fmtMin(grandTotal)}</div><div class="kl">Total Field Time</div></div>
+        ${totalCost != null ? `<div class="eod-kpi kpi-blue"><div class="kv">$${totalCost.toFixed(0)}</div><div class="kl">Est. Day Cost @ $${rate}/hr</div></div>` : '<div class="eod-kpi" style="border:none"></div>'}
+      </div>`;
+
+    // By ticket type
+    if (Object.keys(byType).length > 0) {
+      const typeCards = Object.entries(byType).map(([type, d]) => {
+        const avg  = d.totalMin / d.count;
+        const cost = rate ? `~$${((avg / 60) * rate).toFixed(0)}/stop` : '';
+        return `<div class="eod-type-card">
+          <div class="tc-label">${type === 'Both' ? '🟡🔵 Dual-Scope' : type === 'Asphalt' ? '🟡 Asphalt' : '🔵 Concrete'} · ${d.count} stop${d.count!==1?'s':''}</div>
+          <div class="tc-time">${fmtMin(avg)}</div>
+          <div class="tc-sub">avg on-site${cost ? ' · ' + cost : ''}</div>
+        </div>`;
+      }).join('');
+      timingHtml += `
+        <div class="eod-section-title">Avg Time by Ticket Type — for Rebid Reference</div>
+        <div class="eod-type-grid">${typeCards}</div>
+        ${costPerStop != null ? `<p style="font-size:11px;color:#888;margin-top:6px">💡 Estimated avg labor cost per stop: <strong>$${costPerStop.toFixed(0)}</strong> at $${rate}/hr · ${timed.length} timed stop${timed.length!==1?'s':''}</p>` : ''}`;
+    }
+  }
+
+  // ── Ticket table ──
+  const tableRows = [
+    ...completed.map(r => {
+      const onSite = r.cmp.onSiteMin != null ? fmtMin(r.cmp.onSiteMin) : '—';
+      const cost   = rate && r.cmp.onSiteMin != null ? `$${((r.cmp.onSiteMin / 60) * rate).toFixed(0)}` : '';
+      return `<tr>
+        <td><span class="status-dot dot-green"></span>${(r.ticket.dispatch_address1||'').trim()}</td>
+        <td>${r.city}</td>
+        <td>${r.scope}</td>
+        <td>${r.cmp.startedDisplay ? r.cmp.startedDisplay + ' → ' : ''}${r.cmp.completedAt}</td>
+        <td>${onSite}</td>
+        <td>${cost}</td>
+        <td style="color:#059669;font-weight:600">COMPLETED</td>
+      </tr>`;
+    }),
+    ...skipped.map(r => `<tr class="skipped-row">
+        <td><span class="status-dot dot-red"></span>${(r.ticket.dispatch_address1||'').trim()}</td>
+        <td>${r.city}</td>
+        <td>${r.scope}</td>
+        <td>${r.sk.skippedAt||'—'}</td>
+        <td>—</td>
+        <td>—</td>
+        <td>${r.sk.reason}</td>
+      </tr>`),
+    ...notReached.map(r => `<tr class="notreached-row">
+        <td><span class="status-dot dot-gray"></span>${(r.ticket.dispatch_address1||'').trim()}</td>
+        <td>${r.city}</td>
+        <td>${r.scope}</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td>Not Reached</td>
+      </tr>`),
+  ].join('');
+
+  // ── Skip summary ──
+  let skipSummaryHtml = '';
+  if (skipped.length > 0) {
+    const reasonList = Object.entries(reasonTally)
+      .sort((a,b) => b[1]-a[1])
+      .map(([r, n]) => `<span style="margin-right:16px"><strong>${n}</strong> — ${r}</span>`)
+      .join('');
+    skipSummaryHtml = `
+      <div class="eod-section-title">Skipped Tickets — Action Required in CSI 3000</div>
+      <p style="font-size:12px;color:#666;margin-bottom:8px">Reasons: ${reasonList}</p>
+      <table class="eod-ticket-table">
+        <thead><tr><th>Address</th><th>City</th><th>Route</th><th>Reason</th><th>Notes</th></tr></thead>
+        <tbody>${skipped.map(r => `<tr class="skipped-row">
+          <td>${(r.ticket.dispatch_address1||'').trim()}</td>
+          <td>${r.city}</td>
+          <td>${r.scope}</td>
+          <td>${r.sk.reason}</td>
+          <td style="color:#666">${r.sk.note||''}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  const html = `
+    <div class="eod-print-header">
+      <div>
+        <h1>🗺️ Nicor Route — End of Day</h1>
+        <div class="eod-date">${today}</div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#666">
+        ${total} tickets total${rate ? ` · Crew rate $${rate}/hr` : ''}
+      </div>
+    </div>
+    ${kpiHtml}
+    ${timingHtml}
+    ${skipSummaryHtml}
+    <div class="eod-section-title">Full Ticket Log</div>
+    <table class="eod-ticket-table">
+      <thead><tr><th>Address</th><th>City</th><th>Route</th><th>Time</th><th>On-Site</th><th>Cost</th><th>Status</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    <div class="eod-print-footer">
+      <span>Nicor Route Builder</span>
+      <span>Generated ${new Date().toLocaleString()}</span>
+    </div>`;
+
+  document.getElementById('eod-print-content').innerHTML = html;
+  document.getElementById('eod-print-view').classList.add('show');
+}
+
+// ─────────────────────────────────────────────────────────
+//  KML EXPORT FOR GOOGLE MY MAPS
+// ─────────────────────────────────────────────────────────
+function exportKML() {
+  clearKmlStale();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Pin color style IDs — My Maps uses KML StyleMap with icon colors
+  // Google My Maps recognizes these Pushpin icon URLs for color-coded markers
+  const STYLES = {
+    asphalt:  { id: 'asphalt',  color: '#1a73e8', label: 'Asphalt',      icon: 'http://maps.google.com/mapfiles/kml/paddle/blu-blank.png' },
+    concrete: { id: 'concrete', color: '#34a853', label: 'Concrete',      icon: 'http://maps.google.com/mapfiles/kml/paddle/grn-blank.png' },
+    dual:     { id: 'dual',     color: '#fa7b17', label: 'Multi-Ticket',  icon: 'http://maps.google.com/mapfiles/kml/paddle/orange-blank.png' },
+    origin:   { id: 'origin',   color: '#ea4335', label: 'Origin',        icon: 'http://maps.google.com/mapfiles/kml/paddle/red-stars.png' },
+  };
+
+  // Build style definitions block
+  const styleDefs = Object.values(STYLES).map(s => `
+  <Style id="${s.id}">
+    <IconStyle>
+      <color>ff${s.color.slice(5,7)}${s.color.slice(3,5)}${s.color.slice(1,3)}</color>
+      <scale>1.1</scale>
+      <Icon><href>${s.icon}</href></Icon>
+    </IconStyle>
+    <LabelStyle><scale>0.8</scale></LabelStyle>
+    <BalloonStyle>
+      <text><![CDATA[$[description]]]></text>
+    </BalloonStyle>
+  </Style>`).join('');
+
+  // Collect placemarks — de-dupe dual tickets, pick the style from scope
+  // Origin first
+  const placemarks = [];
+
+  placemarks.push({
+    name:  '🚛 Origin — Wauconda, IL',
+    style: 'origin',
+    lat:   ORIGIN.lat,
+    lng:   ORIGIN.lng,
+    desc:  'Daily departure point',
+  });
+
+  // Walk asphalt route first, then concrete — de-dupe by idn
+  const seen     = new Set();
+  let aspStop    = 0;
+  let conStop    = 0;
+
+  // For each route, gather stop numbers per panel independently
+  // but merged KML uses a global sequence, so we track separately
+  asphaltRoute.forEach((t, i) => {
+    const idn    = String(t.unique_idn);
+    const isDual = !!t._isDual;
+    const style  = isDual ? 'dual' : 'asphalt';
+    const stopNo = i + 1;
+    const coords = t._addrCoords || t._verifiedCoords || t._coords;
+    if (!coords) return;
+    if (seen.has(idn)) return;
+    seen.add(idn);
+
+    const addr = getRoutedAddress(t);
+    const city = (CITY_NAMES[(t.dispatch_city||'').toLowerCase()] || (t.dispatch_city||'').replace(/_/g,' ')).trim();
+    const desc  = [
+      `<b>CSI 3000 Ticket #${idn}</b>`,
+      `Route: ${isDual ? 'Multi-Ticket (Asphalt + Concrete)' : 'Asphalt'}`,
+      `Address: ${addr}`,
+      `Customer Order: ${(t.customer_order_no||'').toString().trim() || '—'}`,
+      `Work: ${(t.description_of_repair||'').trim() || '—'}`,
+    ].join('<br>');
+
+    placemarks.push({
+      name:  `#${idn} · ${addr.split(',')[0].trim()}`,
+      style,
+      lat:   coords.lat,
+      lng:   coords.lng,
+      desc,
+    });
+  });
+
+  // Concrete route — skip already-seen duals (already in asphalt list)
+  concreteRoute.forEach((t, i) => {
+    if (t._isDrop) return; // concrete orders are not Nicor tickets — omit from KML
+    const idn    = String(t.unique_idn);
+    const isDual = !!t._isDual;
+    const style  = isDual ? 'dual' : 'concrete';
+    const stopNo = i + 1;
+    const coords = t._addrCoords || t._verifiedCoords || t._coords;
+    if (!coords) return;
+    if (seen.has(idn)) {
+      const existing = placemarks.find(p => p.name.includes(`#${idn}`));
+      if (existing) existing.name += ` (Asp+Con)`;
+      return;
+    }
+    seen.add(idn);
+
+    const addr = getRoutedAddress(t);
+    const desc  = [
+      `<b>CSI 3000 Ticket #${idn}</b>`,
+      `Route: Concrete`,
+      `Address: ${addr}`,
+      `Customer Order: ${(t.customer_order_no||'').toString().trim() || '—'}`,
+      `Work: ${(t.description_of_repair||'').trim() || '—'}`,
+    ].join('<br>');
+
+    placemarks.push({
+      name:  `#${idn} · ${addr.split(',')[0].trim()}`,
+      style,
+      lat:   coords.lat,
+      lng:   coords.lng,
+      desc,
+    });
+  });
+
+  // Build KML
+  const pmXml = placemarks.map(p => `
+  <Placemark>
+    <name>${escXml(p.name)}</name>
+    <description><![CDATA[${p.desc}]]></description>
+    <styleUrl>#${p.style}</styleUrl>
+    <Point><coordinates>${p.lng},${p.lat},0</coordinates></Point>
+  </Placemark>`).join('');
+
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Nicor Route ${today}</name>
+  <description>Color-coded route: Blue=Asphalt, Green=Concrete, Orange=Multi-Ticket</description>
+  ${styleDefs}
+  ${pmXml}
+</Document>
+</kml>`;
+
+  const b64  = btoa(unescape(encodeURIComponent(kml)));
+  const url  = `data:application/vnd.google-earth.kml+xml;base64,${b64}`;
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `Nicor_Route_${today}.kml`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function escXml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────
+//  RESET
+// ─────────────────────────────────────────────────────────
+function resetTool() {
+  allActive=[]; asphaltRoute=[]; concreteRoute=[]; flaggedTickets=[];
+  fixState={}; skipState={}; completeState={}; startState={}; dropCounter=0;
+
+  document.getElementById('drop-zone').style.display = '';
+  document.getElementById('results').classList.remove('show');
+  document.getElementById('review-section').style.display = 'none';
+  document.getElementById('skipped-summary').classList.remove('show');
+  document.getElementById('btn-end-day').style.display = 'none';
+  document.getElementById('rate-bar').style.display = 'none';
+  document.getElementById('progress-asphalt').classList.remove('show');
+  document.getElementById('progress-concrete').classList.remove('show');
+  document.getElementById('eod-print-view').classList.remove('show');
+  ['no-install-msg','install-msg','dual-info'].forEach(id =>
+    document.getElementById(id).classList.remove('show')
+  );
+  document.getElementById('flag-counter').classList.remove('show');
+  document.getElementById('skip-counter').classList.remove('show');
+  document.getElementById('file-input').value = '';
+  document.getElementById('week-label-wrap').classList.remove('show');
+  document.getElementById('week-date-input').value = '';
+  // Reset view mode & filters
+  document.getElementById('search-wrap').classList.remove('show');
+  document.getElementById('view-toggle-wrap').style.display = 'none';
+  document.getElementById('route-filter-wrap').classList.remove('show');
+  document.body.classList.remove('crew-mode');
+  currentViewMode = 'dispatcher';
+  currentRouteFilter = 'all';
+  const grid = document.querySelector('.routes-grid');
+  if (grid) grid.classList.remove('show-asphalt','show-concrete');
+  document.getElementById('mode-dispatcher').classList.add('active-dispatcher');
+  document.getElementById('mode-crew').classList.remove('active-crew');
+  document.querySelectorAll('.rfbtn').forEach(b => b.classList.remove('rf-active'));
+  const rfAll = document.getElementById('rf-all');
+  if (rfAll) rfAll.classList.add('rf-active');
+  clearSearch();
+}
+</script>
+<!-- Printable End of Day Report -->
+<div id="eod-print-view">
+  <button class="btn-close-print" onclick="closePrintView()">✕ Close</button>
+  <div id="eod-print-content"></div>
+</div>
+
+</body>
+</html>
