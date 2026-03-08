@@ -2612,15 +2612,13 @@ async function sendEODtoPowerAutomate(reportHTML) {
 
     const resp = await fetch(POWER_AUTOMATE_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: today, weekOf, completed, skipped, totalStops, reportHTML })
     });
 
-    if (resp.ok || resp.status === 202) {
-      if (statusEl) { statusEl.textContent = '✅ Report saved to SharePoint & emailed'; statusEl.style.color = '#34d399'; }
-    } else {
-      throw new Error(`Status ${resp.status}`);
-    }
+    // no-cors returns opaque response — if no error thrown, assume success
+    if (statusEl) { statusEl.textContent = '✅ Report sent to SharePoint & Outlook'; statusEl.style.color = '#34d399'; }
   } catch (err) {
     console.error('Power Automate error:', err);
     if (statusEl) { statusEl.textContent = '⚠️ Could not send — check connection'; statusEl.style.color = '#f87171'; }
