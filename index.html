@@ -2404,6 +2404,8 @@ function confirmEndDay() {
 
 function closePrintView() {
   document.getElementById('eod-print-view').classList.remove('show');
+  const statusEl = document.getElementById('pa-send-status');
+  if (statusEl) statusEl.textContent = '';
   document.getElementById('geocode-progress').style.display = 'none';
   document.getElementById('search-wrap').classList.remove('show');
   clearSearch();
@@ -2585,6 +2587,44 @@ function generatePrintableReport() {
 
   document.getElementById('eod-print-content').innerHTML = html;
   document.getElementById('eod-print-view').classList.add('show');
+
+  // Send to Power Automate (SharePoint + Outlook)
+  sendEODtoPowerAutomate(html);
+}
+
+// ─────────────────────────────────────────────────────────
+//  POWER AUTOMATE — EOD REPORT (SharePoint + Outlook)
+// ─────────────────────────────────────────────────────────
+const POWER_AUTOMATE_URL = 'https://default80b87d3378ab49799a42dec6e26d22.ca.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/376fbf3812ca4f48b98d38e436af8cfc/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yO1O_3xm6L1NKegVfzR_kjvH2iLoQr8-Ckzt6CHv5M';
+
+async function sendEODtoPowerAutomate(reportHTML) {
+  const today     = new Date().toLocaleDateString('en-US', { month:'2-digit', day:'2-digit', year:'numeric' });
+  const weekOf    = document.getElementById('week-date-input')?.value || '';
+  const completed = Object.keys(completeState).length;
+  const skipped   = Object.keys(skipState).length;
+  const totalStops = asphaltRoute.filter(t => !t._isDrop).length +
+                     concreteRoute.filter(t => !t._isDrop).length;
+
+  const statusEl = document.getElementById('pa-send-status');
+
+  try {
+    if (statusEl) { statusEl.textContent = '📤 Sending to SharePoint & Outlook…'; statusEl.style.color = '#fbbf24'; }
+
+    const resp = await fetch(POWER_AUTOMATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today, weekOf, completed, skipped, totalStops, reportHTML })
+    });
+
+    if (resp.ok || resp.status === 202) {
+      if (statusEl) { statusEl.textContent = '✅ Report saved to SharePoint & emailed'; statusEl.style.color = '#34d399'; }
+    } else {
+      throw new Error(`Status ${resp.status}`);
+    }
+  } catch (err) {
+    console.error('Power Automate error:', err);
+    if (statusEl) { statusEl.textContent = '⚠️ Could not send — check connection'; statusEl.style.color = '#f87171'; }
+  }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2776,6 +2816,7 @@ function resetTool() {
 <!-- Printable End of Day Report -->
 <div id="eod-print-view">
   <button class="btn-close-print" onclick="closePrintView()">✕ Close</button>
+  <div id="pa-send-status" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#111;color:#fbbf24;border:1px solid #333;padding:7px 18px;border-radius:20px;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;z-index:202;white-space:nowrap"></div>
   <div id="eod-print-content"></div>
 </div>
 
